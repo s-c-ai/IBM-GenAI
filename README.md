@@ -31,17 +31,15 @@ CESPUB GenAI
 
 ---
 
-* Board de atividades: [Planner](https://planner.cloud.microsoft/webui/plan/8R7zsF8fG0i6HQxbJ54n42QAGHKR/view/board?tid=26c14496-9556-43db-8169-202c0c793d4d)
-* Especificação do Projeto: [Proposta CESPUB](https://scientificloud01.sharepoint.com/sites/CESPUBGenAI/Documentos%20Compartilhados/Forms/AllItems.aspx?id=%2Fsites%2FCESPUBGenAI%2FDocumentos%20Compartilhados%2FCESPUB%20%2D%20Proposta%20Claudinho%20%2D%20tecnica%201%2Epdf&parent=%2Fsites%2FCESPUBGenAI%2FDocumentos%20Compartilhados)
-* Documentação: [Documentação WrenAI](https://github.com/s-c-ai/CESPUB-GenAI/blob/main/OLD_README.md)
+- Board de atividades: [Planner](https://planner.cloud.microsoft/webui/plan/8R7zsF8fG0i6HQxbJ54n42QAGHKR/view/board?tid=26c14496-9556-43db-8169-202c0c793d4d)
+- Especificação do Projeto: [Proposta CESPUB](https://scientificloud01.sharepoint.com/sites/CESPUBGenAI/Documentos%20Compartilhados/Forms/AllItems.aspx?id=%2Fsites%2FCESPUBGenAI%2FDocumentos%20Compartilhados%2FCESPUB%20%2D%20Proposta%20Claudinho%20%2D%20tecnica%201%2Epdf&parent=%2Fsites%2FCESPUBGenAI%2FDocumentos%20Compartilhados)
+- Documentação: [Documentação WrenAI](https://github.com/s-c-ai/CESPUB-GenAI/blob/main/OLD_README.md)
 
 ---
 
 ## Sobre o Projeto
 
 Viabilizar análises e criação de insights a partir de dados de editais passados.
-
-
 
 ```mermaid
 flowchart LR
