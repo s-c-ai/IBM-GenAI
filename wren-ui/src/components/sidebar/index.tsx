@@ -7,7 +7,6 @@ import { DiscordIcon, GithubIcon } from '@/utils/icons';
 import SettingOutlined from '@ant-design/icons/SettingOutlined';
 import Home, { Props as HomeSidebarProps } from './Home';
 import Modeling, { Props as ModelingSidebarProps } from './Modeling';
-import LearningSection from '@/components/learning';
 
 const Layout = styled.div`
   position: relative;
@@ -76,7 +75,6 @@ export default function Sidebar(props: Props) {
   return (
     <Layout className="d-flex flex-column">
       <DynamicSidebar {...props} pathname={router.pathname} />
-      <LearningSection />
       <div className="border-t border-gray-4 pt-2">
         <StyledButton type="text" block onClick={onSettingsClick}>
           <SettingOutlined className="text-md" />
