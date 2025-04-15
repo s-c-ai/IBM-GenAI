@@ -25,7 +25,7 @@
   <p class="text-dark-blue text-xs mt-6">
     Problems to log in your account? <a
       class="text-primary font-bold text-xs cursor-pointer"
-      href="mailto:contato@s-c.ai">Send us an email</a
+      href="mailto:claudinho@s-c.ai">Send us an email</a
     >
   </p>
 </div>
