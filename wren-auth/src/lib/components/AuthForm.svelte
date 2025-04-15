@@ -1,25 +1,16 @@
 <script lang="ts">
   import logoImage from "$assets/logo-with-text.svg";
   import Icon from "@iconify/svelte";
-
-  let isRegistration = $state(false);
 </script>
 
 <div
   class="px-15 py-31 auth-border flex flex-col justify-center w-full h-full items-center md:items-start"
 >
   <img src={logoImage} alt="" class="mb-10 w-100 h-20" />
-  {#if isRegistration}
-    <h1 class="text-dark-blue font-bold text-5xl mb-6">Sign Up</h1>
-    <h2 class="text-dark-blue font-medium text-2xl mb-10">Welcome!</h2>
-  {:else}
-    <h1
-      class="text-center md:text-start text-dark-blue font-bold text-5xl mb-6"
-    >
-      Log in to your account
-    </h1>
-    <h2 class="text-dark-blue font-medium text-2xl mb-10">Welcome back!</h2>
-  {/if}
+  <h1 class="text-center md:text-start text-dark-blue font-bold text-5xl mb-6">
+    Log in to your account
+  </h1>
+  <h2 class="text-dark-blue font-medium text-2xl mb-10">Welcome back!</h2>
   <form action="" class="auth-form flex flex-col w-full h-full items-center">
     <button
       class="flex flex-col items-center gap-4 border rounded-xl py-3 px-10 border-primary hover:shadow-xl cursor-pointer"
