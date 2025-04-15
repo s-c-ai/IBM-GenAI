@@ -1,6 +1,8 @@
 <script lang="ts">
-  import logoImage from "$assets/logo-with-text.svg";
   import Icon from "@iconify/svelte";
+
+  import logoImage from "$assets/logo-with-text.svg";
+  import { LoginButton } from "$components";
 </script>
 
 <div
@@ -11,14 +13,14 @@
     Log in to your account
   </h1>
   <h2 class="text-dark-blue font-medium text-2xl mb-10">Welcome back!</h2>
-  <form action="" class="auth-form flex flex-col w-full h-full items-center">
-    <button
-      class="flex flex-col items-center gap-4 border rounded-xl py-3 px-10 border-primary hover:shadow-xl cursor-pointer"
-      type="submit"
-    >
-      <Icon icon="logos:google" height="50" />
-      <p class="text-sm text-dark-blue">Login with Google account</p>
-    </button>
+  <form
+    method="post"
+    class="auth-form flex flex-col w-full h-full items-center"
+  >
+    <LoginButton type="submit">
+      <Icon icon="logos:google-icon" width="24" height="24" />
+      <span class="text-sm text-dark-blue">Login with Google account</span>
+    </LoginButton>
   </form>
   <p class="text-dark-blue text-xs mt-6">
     Problems to log in your account? <a
