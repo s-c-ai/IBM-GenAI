@@ -42,6 +42,8 @@ You can preview the production build with `npm run preview`.
 Create a `.env` file with:
 
 ```
-CLIENT_ID
-CLIENT_SECRET
+CLIENT_ID=
+CLIENT_SECRET=
+REDIRECT_WRENAI=
+REDIRECT_OAUTH=
 ```

@@ -1,15 +1,13 @@
 import { redirect, type Actions } from "@sveltejs/kit";
-import { CLIENT_ID, CLIENT_SECRET } from "$env/static/private";
+import { CLIENT_ID, CLIENT_SECRET, REDIRECT_OAUTH } from "$env/static/private";
 import { OAuth2Client } from "google-auth-library";
 
 export const actions: Actions = {
   default: async ({}) => {
-    const redirectURL = "http://localhost:5173/oauth";
-
     const oAuth2Client = new OAuth2Client(
       CLIENT_ID,
       CLIENT_SECRET,
-      redirectURL,
+      REDIRECT_OAUTH,
     );
 
     const authorizeURL = oAuth2Client.generateAuthUrl({
