@@ -14,4 +14,5 @@ COPY package.json .
 EXPOSE 5173
 ENV NODE_ENV=production
 ENV PORT=5173
-CMD [ "node", "build" ]
+ENV ORIGIN=http://localhost:5173
+CMD ["node", "build" ]
