@@ -7,7 +7,7 @@ import {
   REDIRECT_OAUTH,
 } from "$env/static/private";
 
-export const GET: RequestHandler = async ({ url }) => {
+export const GET: RequestHandler = async ({ url, cookies }) => {
   const code = url.searchParams.get("code");
   const oAuth2Client = new OAuth2Client(
     CLIENT_ID,
@@ -18,8 +18,21 @@ export const GET: RequestHandler = async ({ url }) => {
   if (code) {
     try {
       const response = await oAuth2Client.getToken(code);
+      const accessToken = response.tokens.access_token;
+      if(!accessToken) {
+        throw new Error("Access token not found")
+      }
+
+      cookies.set("google_auth_token", accessToken, {
+        path:"/",
+        httpOnly: true,
+        maxAge: 60 * 60 * 24 * 7,
+        sameSite: "strict"
+      });
+
       oAuth2Client.setCredentials(response.tokens);
     } catch (err) {
+      console.error("Failed to retrieve access token", err)
       return new Response(`Something went wrong: ${err}`, { status: 500 });
     }
   }
