@@ -30,7 +30,7 @@ export const GET: RequestHandler = async ({ url, cookies }) => {
       }
 
       cookies.set("google_auth_token", accessToken, {
-        path: "/",
+        path:"/",
         httpOnly: true,
         maxAge: 60 * 60 * 24 * 7,
         sameSite: "strict"
