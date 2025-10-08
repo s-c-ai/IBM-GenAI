@@ -18,6 +18,9 @@ import {
   toIbisConnectionInfo,
   toMultipleIbisConnectionInfos,
 } from '../dataSource';
+import { DialectSQL, WrenSQL } from '../models/adaptor';
+
+export type { WrenSQL };
 
 const logger = getLogger('IbisAdaptor');
 logger.level = 'debug';
@@ -57,28 +60,61 @@ export interface IbisTrinoConnectionInfo {
 
 export interface IbisSnowflakeConnectionInfo {
   user: string;
-  password: string;
   account: string;
   database: string;
   schema: string;
+  password?: string;
+  privateKey?: string;
+  warehouse?: string;
 }
 
-export type IbisConnectionInfo =
-  | UrlBasedConnectionInfo
-  | HostBasedConnectionInfo
-  | IbisPostgresConnectionInfo
-  | IbisBigQueryConnectionInfo
-  | IbisTrinoConnectionInfo
-  | IbisSnowflakeConnectionInfo;
+export interface IbisAthenaConnectionInfo {
+  aws_access_key_id: string;
+  aws_secret_access_key: string;
+  region_name: string;
+  s3_staging_dir: string;
+  schema_name: string;
+}
+
+export enum IbisRedshiftConnectionType {
+  REDSHIFT = 'redshift',
+  REDSHIFT_IAM = 'redshift_iam',
+}
+
+interface IbisRedshiftPasswordAuth {
+  host: string;
+  port: number;
+  database: string;
+  user: string;
+  password: string;
+  redshift_type: IbisRedshiftConnectionType;
+}
+
+interface IbisRedshiftIAMAuth {
+  cluster_identifier: string;
+  user: string;
+  database: string;
+  region: string;
+  access_key_id: string;
+  access_key_secret: string;
+  redshift_type: IbisRedshiftConnectionType;
+}
+
+export type IbisRedshiftConnectionInfo =
+  | IbisRedshiftPasswordAuth
+  | IbisRedshiftIAMAuth;
 
 export enum SupportedDataSource {
   POSTGRES = 'POSTGRES',
   BIG_QUERY = 'BIG_QUERY',
   SNOWFLAKE = 'SNOWFLAKE',
   MYSQL = 'MYSQL',
+  ORACLE = 'ORACLE',
   MSSQL = 'MSSQL',
   CLICK_HOUSE = 'CLICK_HOUSE',
   TRINO = 'TRINO',
+  ATHENA = 'ATHENA',
+  REDSHIFT = 'REDSHIFT',
 }
 
 const dataSourceUrlMap: Record<SupportedDataSource, string> = {
@@ -86,10 +122,14 @@ const dataSourceUrlMap: Record<SupportedDataSource, string> = {
   [SupportedDataSource.BIG_QUERY]: 'bigquery',
   [SupportedDataSource.SNOWFLAKE]: 'snowflake',
   [SupportedDataSource.MYSQL]: 'mysql',
+  [SupportedDataSource.ORACLE]: 'oracle',
   [SupportedDataSource.MSSQL]: 'mssql',
   [SupportedDataSource.CLICK_HOUSE]: 'clickhouse',
   [SupportedDataSource.TRINO]: 'trino',
+  [SupportedDataSource.ATHENA]: 'athena',
+  [SupportedDataSource.REDSHIFT]: 'redshift',
 };
+
 export interface TableResponse {
   tables: CompactTable[];
 }
@@ -110,15 +150,19 @@ export interface IbisBaseOptions {
 }
 export interface IbisQueryOptions extends IbisBaseOptions {
   limit?: number;
+  refresh?: boolean;
+  cacheEnabled?: boolean;
 }
 export interface IbisDryPlanOptions {
   dataSource: DataSourceName;
   mdl: Manifest;
+  // TODO: replace sql type with WrenSQL
   sql: string;
 }
 
 export interface IIbisAdaptor {
   query: (
+    // TODO: replace query type with WrenSQL
     query: string,
     options: IbisQueryOptions,
   ) => Promise<IbisQueryResponse>;
@@ -140,6 +184,20 @@ export interface IIbisAdaptor {
     mdl: Manifest,
     parameters: Record<string, any>,
   ) => Promise<ValidationResponse>;
+  modelSubstitute: (
+    sql: DialectSQL,
+    options: {
+      dataSource: DataSourceName;
+      connectionInfo: WREN_AI_CONNECTION_INFO;
+      mdl: Manifest;
+      catalog?: string;
+      schema?: string;
+    },
+  ) => Promise<WrenSQL>;
+  getVersion: (
+    dataSource: DataSourceName,
+    connectionInfo: WREN_AI_CONNECTION_INFO,
+  ) => Promise<string>;
 }
 
 export interface IbisResponse {
@@ -151,6 +209,10 @@ export interface IbisQueryResponse extends IbisResponse {
   columns: string[];
   data: any[];
   dtypes: Record<string, string>;
+  cacheHit?: boolean;
+  cacheCreatedAt?: string;
+  cacheOverrodeAt?: string;
+  override?: boolean;
 }
 
 export interface DryRunResponse extends IbisResponse {}
@@ -162,6 +224,7 @@ enum IBIS_API_TYPE {
   METADATA = 'METADATA',
   VALIDATION = 'VALIDATION',
   ANALYSIS = 'ANALYSIS',
+  MODEL_SUBSTITUTE = 'MODEL_SUBSTITUTE',
 }
 
 export class IbisAdaptor implements IIbisAdaptor {
@@ -183,11 +246,8 @@ export class IbisAdaptor implements IIbisAdaptor {
       );
       return res.data;
     } catch (e) {
-      logger.debug(`Got error when dry plan with ibis: ${e.response.data}`);
-      throw Errors.create(Errors.GeneralErrorCodes.DRY_PLAN_ERROR, {
-        customMessage: e.response.data,
-        originalError: e,
-      });
+      logger.debug(`Dry plan error: ${e.response?.data || e.message}`);
+      this.throwError(e, 'Error during dry plan execution');
     }
   }
 
@@ -198,6 +258,7 @@ export class IbisAdaptor implements IIbisAdaptor {
     const { dataSource, mdl } = options;
     const connectionInfo = this.updateConnectionInfo(options.connectionInfo);
     const ibisConnectionInfo = toIbisConnectionInfo(dataSource, connectionInfo);
+    const queryString = this.buildQueryString(options);
     const body = {
       sql: query,
       connectionInfo: ibisConnectionInfo,
@@ -205,7 +266,7 @@ export class IbisAdaptor implements IIbisAdaptor {
     };
     try {
       const res = await axios.post(
-        `${this.ibisServerEndpoint}/${this.getIbisApiVersion(IBIS_API_TYPE.QUERY)}/connector/${dataSourceUrlMap[dataSource]}/query`,
+        `${this.ibisServerEndpoint}/${this.getIbisApiVersion(IBIS_API_TYPE.QUERY)}/connector/${dataSourceUrlMap[dataSource]}/query${queryString}`,
         body,
         {
           params: {
@@ -217,21 +278,18 @@ export class IbisAdaptor implements IIbisAdaptor {
         ...res.data,
         correlationId: res.headers['x-correlation-id'],
         processTime: res.headers['x-process-time'],
+        cacheHit: res.headers['x-cache-hit'] === 'true',
+        cacheCreatedAt:
+          res.headers['x-cache-create-at'] &&
+          new Date(parseInt(res.headers['x-cache-create-at'])).toISOString(),
+        cacheOverrodeAt:
+          res.headers['x-cache-override-at'] &&
+          new Date(parseInt(res.headers['x-cache-override-at'])).toISOString(),
+        override: res.headers['x-cache-override'] === 'true',
       };
     } catch (e) {
-      logger.debug(
-        `Got error when querying ibis: ${e.response?.data || e.message}`,
-      );
-
-      throw Errors.create(Errors.GeneralErrorCodes.IBIS_SERVER_ERROR, {
-        customMessage:
-          e.response?.data || e.message || 'Error querying ibis server',
-        originalError: e,
-        other: {
-          correlationId: e.response?.headers['x-correlation-id'],
-          processTime: e.response?.headers['x-process-time'],
-        },
-      });
+      logger.debug(`Query error: ${e.response?.data || e.message}`);
+      this.throwError(e, 'Error querying ibis server');
     }
   }
 
@@ -259,15 +317,8 @@ export class IbisAdaptor implements IIbisAdaptor {
         processTime: response.headers['x-process-time'],
       };
     } catch (err) {
-      logger.info(`Got error when dry running ibis`);
-      throw Errors.create(Errors.GeneralErrorCodes.DRY_RUN_ERROR, {
-        customMessage: err.response?.data || err.message,
-        originalError: err,
-        other: {
-          correlationId: err.response?.headers['x-correlation-id'],
-          processTime: err.response?.headers['x-process-time'],
-        },
-      });
+      logger.debug(`Dry run error: ${err.response?.data || err.message}`);
+      this.throwError(err, 'Error during dry run execution');
     }
   }
 
@@ -310,16 +361,8 @@ export class IbisAdaptor implements IIbisAdaptor {
       );
       return await getTablesByConnectionInfo(ibisConnectionInfo);
     } catch (e) {
-      logger.debug(
-        `Got error when getting table: ${e.response?.data || e.message}`,
-      );
-      throw Errors.create(Errors.GeneralErrorCodes.IBIS_SERVER_ERROR, {
-        customMessage:
-          e.response?.data ||
-          e.message ||
-          'Error getting table from ibis server',
-        originalError: e,
-      });
+      logger.debug(`Get tables error: ${e.response?.data || e.message}`);
+      this.throwError(e, 'Error getting table from ibis server');
     }
   }
 
@@ -340,17 +383,8 @@ export class IbisAdaptor implements IIbisAdaptor {
       );
       return res.data;
     } catch (e) {
-      logger.debug(
-        `Got error when getting constraint: ${e.response?.data || e.message}`,
-      );
-
-      throw Errors.create(Errors.GeneralErrorCodes.IBIS_SERVER_ERROR, {
-        customMessage:
-          e.response?.data ||
-          e.message ||
-          'Error getting constraint from ibis server',
-        originalError: e,
-      });
+      logger.debug(`Get constraints error: ${e.response?.data || e.message}`);
+      this.throwError(e, 'Error getting constraint from ibis server');
     }
   }
 
@@ -376,11 +410,75 @@ export class IbisAdaptor implements IIbisAdaptor {
       );
       return { valid: true, message: null };
     } catch (e) {
-      logger.debug(
-        `Got error when validating connection: ${e.response?.data || e.message}`,
-      );
-
+      logger.debug(`Validation error: ${e.response?.data || e.message}`);
       return { valid: false, message: e.response?.data || e.message };
+    }
+  }
+
+  public async modelSubstitute(
+    sql: DialectSQL,
+    options: {
+      dataSource: DataSourceName;
+      connectionInfo: WREN_AI_CONNECTION_INFO;
+      mdl: Manifest;
+      catalog?: string;
+      schema?: string;
+    },
+  ): Promise<WrenSQL> {
+    const { dataSource, mdl, catalog, schema } = options;
+    let connectionInfo = options.connectionInfo;
+    connectionInfo = this.updateConnectionInfo(connectionInfo);
+    const headers = {
+      'X-User-CATALOG': catalog,
+      'X-User-SCHEMA': schema,
+    };
+    const ibisConnectionInfo = toIbisConnectionInfo(dataSource, connectionInfo);
+    const body = {
+      sql,
+      connectionInfo: ibisConnectionInfo,
+      manifestStr: Buffer.from(JSON.stringify(mdl)).toString('base64'),
+    };
+    try {
+      logger.debug(`Running model substitution with ibis`);
+      const res = await axios.post(
+        `${this.ibisServerEndpoint}/${this.getIbisApiVersion(IBIS_API_TYPE.MODEL_SUBSTITUTE)}/connector/${dataSourceUrlMap[dataSource]}/model-substitute`,
+        body,
+        {
+          headers,
+        },
+      );
+      return res.data as WrenSQL;
+    } catch (e) {
+      logger.debug(
+        `Model substitution error: ${e.response?.data || e.message}`,
+      );
+      this.throwError(
+        e,
+        'Error running model substitution with ibis server',
+        this.modelSubstituteErrorMessageBuilder,
+      );
+    }
+  }
+
+  public async getVersion(
+    dataSource: DataSourceName,
+    connectionInfo: WREN_AI_CONNECTION_INFO,
+  ): Promise<string> {
+    connectionInfo = this.updateConnectionInfo(connectionInfo);
+    const ibisConnectionInfo = toIbisConnectionInfo(dataSource, connectionInfo);
+    const body = {
+      connectionInfo: ibisConnectionInfo,
+    };
+    try {
+      logger.debug(`Getting version from ibis`);
+      const res: AxiosResponse<string> = await axios.post(
+        `${this.ibisServerEndpoint}/${this.getIbisApiVersion(IBIS_API_TYPE.METADATA)}/connector/${dataSourceUrlMap[dataSource]}/metadata/version`,
+        body,
+      );
+      return res.data;
+    } catch (e) {
+      logger.debug(`Get version error: ${e.response?.data || e.message}`);
+      this.throwError(e, 'Error getting version from ibis server');
     }
   }
 
@@ -437,8 +535,89 @@ export class IbisAdaptor implements IIbisAdaptor {
       IBIS_API_TYPE.DRY_RUN,
       IBIS_API_TYPE.DRY_PLAN,
       IBIS_API_TYPE.VALIDATION,
+      IBIS_API_TYPE.MODEL_SUBSTITUTE,
     ].includes(apiType);
     if (useV3) logger.debug('Using ibis v3 api');
     return useV3 ? 'v3' : 'v2';
+  }
+
+  private throwError(
+    e: any,
+    defaultMessage: string,
+    errorMessageBuilder?: CallableFunction,
+  ) {
+    const customMessage =
+      e.response?.data?.message ||
+      e.response?.data ||
+      e.message ||
+      defaultMessage;
+
+    const errorData = e.response?.data;
+    throw Errors.create(Errors.GeneralErrorCodes.IBIS_SERVER_ERROR, {
+      customMessage: errorMessageBuilder
+        ? errorMessageBuilder(customMessage)
+        : customMessage,
+      originalError: e,
+      other: {
+        correlationId: e.response?.headers['x-correlation-id'],
+        processTime: e.response?.headers['x-process-time'],
+        ...errorData,
+      },
+    });
+  }
+
+  private modelSubstituteErrorMessageBuilder(message: string) {
+    const ModelSubstituteErrorEnum = {
+      MODEL_NOT_FOUND: () => {
+        return message.includes('Model not found');
+      },
+      PARSING_EXCEPTION: () => {
+        return message.includes('sql.parser.ParsingException');
+      },
+    };
+    if (ModelSubstituteErrorEnum.MODEL_NOT_FOUND()) {
+      const modelName = message.split(': ')[1];
+      const dotCount = modelName.split('.').length - 1;
+      switch (dotCount) {
+        case 0:
+          return (
+            message +
+            `. Try adding both catalog and schema before your table name. e.g. my_database.public.${modelName}`
+          );
+        case 1:
+          return (
+            message +
+            `. Try adding the catalog before the schema in your table name. e.g. my_database.${modelName}`
+          );
+        case 2:
+          return (
+            message +
+            `. It may be missing from models, misnamed, or have a case mismatch.`
+          );
+        default:
+          return (
+            message +
+            `. It may be missing from models, misnamed, or have a case mismatch.`
+          );
+      }
+    } else if (ModelSubstituteErrorEnum.PARSING_EXCEPTION()) {
+      return (
+        message +
+        '. Please check your selected column and make sure its quoted for columns with non-alphanumeric characters.'
+      );
+    }
+    return message;
+  }
+
+  private buildQueryString(options: IbisQueryOptions) {
+    if (!options.cacheEnabled) {
+      return '';
+    }
+    const queryString = [];
+    queryString.push('cacheEnable=true');
+    if (options.refresh) {
+      queryString.push('overrideCache=true');
+    }
+    return `?${queryString.join('&')}`;
   }
 }

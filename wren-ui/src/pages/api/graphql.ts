@@ -43,7 +43,10 @@ const bootstrapServer = async () => {
     modelNestedColumnRepository,
     dashboardRepository,
     dashboardItemRepository,
-
+    sqlPairRepository,
+    instructionRepository,
+    apiHistoryRepository,
+    dashboardItemRefreshJobRepository,
     // adaptors
     wrenEngineAdaptor,
     ibisAdaptor,
@@ -56,10 +59,13 @@ const bootstrapServer = async () => {
     deployService,
     mdlService,
     dashboardService,
+    sqlPairService,
 
+    instructionService,
     // background trackers
     projectRecommendQuestionBackgroundTracker,
     threadRecommendQuestionBackgroundTracker,
+    dashboardCacheBackgroundTracker,
   } = components;
 
   const modelService = new ModelService({
@@ -134,6 +140,8 @@ const bootstrapServer = async () => {
       askingService,
       queryService,
       dashboardService,
+      sqlPairService,
+      instructionService,
       // repository
       projectRepository,
       modelRepository,
@@ -146,10 +154,14 @@ const bootstrapServer = async () => {
       learningRepository,
       dashboardRepository,
       dashboardItemRepository,
-
+      sqlPairRepository,
+      instructionRepository,
+      apiHistoryRepository,
+      dashboardItemRefreshJobRepository,
       // background trackers
       projectRecommendQuestionBackgroundTracker,
       threadRecommendQuestionBackgroundTracker,
+      dashboardCacheBackgroundTracker,
     }),
   });
   await apolloServer.start();

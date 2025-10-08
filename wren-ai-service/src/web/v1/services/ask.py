@@ -8,37 +8,28 @@ from pydantic import AliasChoices, BaseModel, Field
 
 from src.core.pipeline import BasicPipeline
 from src.utils import trace_metadata
-from src.web.v1.services import Configuration, SSEEvent
-from src.web.v1.services.ask_details import SQLBreakdown
+from src.web.v1.services import BaseRequest, SSEEvent
 
 logger = logging.getLogger("wren-ai-service")
 
 
 class AskHistory(BaseModel):
     sql: str
-    steps: List[SQLBreakdown]
+    question: str
 
 
 # POST /v1/asks
-class AskRequest(BaseModel):
-    _query_id: str | None = None
+class AskRequest(BaseRequest):
     query: str
-    # for identifying which collection to access from vectordb
-    project_id: Optional[str] = None
     # don't recommend to use id as a field name, but it's used in the older version of API spec
     # so we need to support as a choice, and will remove it in the future
     mdl_hash: Optional[str] = Field(validation_alias=AliasChoices("mdl_hash", "id"))
-    thread_id: Optional[str] = None
-    history: Optional[AskHistory] = None
-    configurations: Optional[Configuration] = Configuration()
-
-    @property
-    def query_id(self) -> str:
-        return self._query_id
-
-    @query_id.setter
-    def query_id(self, query_id: str):
-        self._query_id = query_id
+    histories: Optional[list[AskHistory]] = Field(default_factory=list)
+    ignore_sql_generation_reasoning: bool = False
+    enable_column_pruning: bool = False
+    use_dry_plan: bool = False
+    allow_dry_plan_fallback: bool = True
+    custom_instruction: Optional[str] = None
 
 
 class AskResponse(BaseModel):
@@ -46,17 +37,8 @@ class AskResponse(BaseModel):
 
 
 # PATCH /v1/asks/{query_id}
-class StopAskRequest(BaseModel):
-    _query_id: str | None = None
+class StopAskRequest(BaseRequest):
     status: Literal["stopped"]
-
-    @property
-    def query_id(self) -> str:
-        return self._query_id
-
-    @query_id.setter
-    def query_id(self, query_id: str):
-        self._query_id = query_id
 
 
 class StopAskResponse(BaseModel):
@@ -79,7 +61,7 @@ class AskResultRequest(BaseModel):
     query_id: str
 
 
-class AskResultResponse(BaseModel):
+class _AskResultResponse(BaseModel):
     status: Literal[
         "understanding",
         "searching",
@@ -93,71 +75,23 @@ class AskResultResponse(BaseModel):
     rephrased_question: Optional[str] = None
     intent_reasoning: Optional[str] = None
     sql_generation_reasoning: Optional[str] = None
-    type: Optional[Literal["MISLEADING_QUERY", "GENERAL", "TEXT_TO_SQL"]] = None
+    type: Optional[Literal["GENERAL", "TEXT_TO_SQL"]] = None
     retrieved_tables: Optional[List[str]] = None
     response: Optional[List[AskResult]] = None
     invalid_sql: Optional[str] = None
     error: Optional[AskError] = None
     trace_id: Optional[str] = None
+    is_followup: bool = False
+    general_type: Optional[
+        Literal["MISLEADING_QUERY", "DATA_ASSISTANCE", "USER_GUIDE"]
+    ] = None
 
 
-# POST /v1/ask-feedbacks
-class AskFeedbackRequest(BaseModel):
-    _query_id: str | None = None
-    tables: List[str]
-    sql_generation_reasoning: str
-    sql: str
-    project_id: Optional[str] = None
-    configurations: Optional[Configuration] = Configuration()
-
-    @property
-    def query_id(self) -> str:
-        return self._query_id
-
-    @query_id.setter
-    def query_id(self, query_id: str):
-        self._query_id = query_id
-
-
-class AskFeedbackResponse(BaseModel):
-    query_id: str
-
-
-# PATCH /v1/ask-feedbacks/{query_id}
-class StopAskFeedbackRequest(BaseModel):
-    _query_id: str | None = None
-    status: Literal["stopped"]
-
-    @property
-    def query_id(self) -> str:
-        return self._query_id
-
-    @query_id.setter
-    def query_id(self, query_id: str):
-        self._query_id = query_id
-
-
-class StopAskFeedbackResponse(BaseModel):
-    query_id: str
-
-
-# GET /v1/ask-feedbacks/{query_id}
-class AskFeedbackResultRequest(BaseModel):
-    query_id: str
-
-
-class AskFeedbackResultResponse(BaseModel):
-    status: Literal[
-        "searching",
-        "generating",
-        "correcting",
-        "finished",
-        "failed",
-        "stopped",
-    ]
-    error: Optional[AskError] = None
-    response: Optional[List[AskResult]] = None
-    trace_id: Optional[str] = None
+class AskResultResponse(_AskResultResponse):
+    is_followup: Optional[bool] = Field(False, exclude=True)
+    general_type: Optional[
+        Literal["MISLEADING_QUERY", "DATA_ASSISTANCE", "USER_GUIDE"]
+    ] = Field(None, exclude=True)
 
 
 class AskService:
@@ -166,6 +100,11 @@ class AskService:
         pipelines: Dict[str, BasicPipeline],
         allow_intent_classification: bool = True,
         allow_sql_generation_reasoning: bool = True,
+        allow_sql_functions_retrieval: bool = True,
+        allow_sql_diagnosis: bool = True,
+        enable_column_pruning: bool = False,
+        max_sql_correction_retries: int = 3,
+        max_histories: int = 5,
         maxsize: int = 1_000_000,
         ttl: int = 120,
     ):
@@ -173,11 +112,13 @@ class AskService:
         self._ask_results: Dict[str, AskResultResponse] = TTLCache(
             maxsize=maxsize, ttl=ttl
         )
-        self._ask_feedback_results: Dict[str, AskFeedbackResultResponse] = TTLCache(
-            maxsize=maxsize, ttl=ttl
-        )
         self._allow_sql_generation_reasoning = allow_sql_generation_reasoning
+        self._allow_sql_functions_retrieval = allow_sql_functions_retrieval
         self._allow_intent_classification = allow_intent_classification
+        self._allow_sql_diagnosis = allow_sql_diagnosis
+        self._enable_column_pruning = enable_column_pruning
+        self._max_histories = max_histories
+        self._max_sql_correction_retries = max_sql_correction_retries
 
     def _is_stopped(self, query_id: str, container: dict):
         if (
@@ -201,17 +142,36 @@ class AskService:
                 "type": "",
                 "error_type": "",
                 "error_message": "",
+                "request_from": ask_request.request_from,
             },
         }
 
         query_id = ask_request.query_id
+        histories = ask_request.histories[: self._max_histories][
+            ::-1
+        ]  # reverse the order of histories
         rephrased_question = None
         intent_reasoning = None
         sql_generation_reasoning = None
         sql_samples = []
+        instructions = []
         api_results = []
         table_names = []
-        error_message = ""
+        error_message = None
+        invalid_sql = None
+        allow_sql_generation_reasoning = (
+            self._allow_sql_generation_reasoning
+            and not ask_request.ignore_sql_generation_reasoning
+        )
+        enable_column_pruning = (
+            self._enable_column_pruning or ask_request.enable_column_pruning
+        )
+        allow_sql_functions_retrieval = self._allow_sql_functions_retrieval
+        allow_sql_diagnosis = self._allow_sql_diagnosis
+        max_sql_correction_retries = self._max_sql_correction_retries
+        current_sql_correction_retries = 0
+        use_dry_plan = ask_request.use_dry_plan
+        allow_dry_plan_fallback = ask_request.allow_dry_plan_fallback
 
         try:
             user_query = ask_request.query
@@ -222,11 +182,12 @@ class AskService:
                 self._ask_results[query_id] = AskResultResponse(
                     status="understanding",
                     trace_id=trace_id,
+                    is_followup=True if histories else False,
                 )
 
                 historical_question = await self._pipelines["historical_question"].run(
                     query=user_query,
-                    id=ask_request.project_id,
+                    project_id=ask_request.project_id,
                 )
 
                 # we only return top 1 result
@@ -239,71 +200,135 @@ class AskService:
                         AskResult(
                             **{
                                 "sql": result.get("statement"),
-                                "type": "view",
+                                "type": "view" if result.get("viewId") else "llm",
                                 "viewId": result.get("viewId"),
                             }
                         )
                         for result in historical_question_result
                     ]
                     sql_generation_reasoning = ""
-                elif self._allow_intent_classification:
-                    intent_classification_result = (
-                        await self._pipelines["intent_classification"].run(
+                else:
+                    # Run both pipeline operations concurrently
+                    sql_samples_task, instructions_task = await asyncio.gather(
+                        self._pipelines["sql_pairs_retrieval"].run(
                             query=user_query,
-                            history=ask_request.history,
-                            id=ask_request.project_id,
-                            configuration=ask_request.configurations,
-                        )
-                    ).get("post_process", {})
-                    intent = intent_classification_result.get("intent")
-                    rephrased_question = intent_classification_result.get(
-                        "rephrased_question"
+                            project_id=ask_request.project_id,
+                        ),
+                        self._pipelines["instructions_retrieval"].run(
+                            query=user_query,
+                            project_id=ask_request.project_id,
+                            scope="sql",
+                        ),
                     )
-                    intent_reasoning = intent_classification_result.get("reasoning")
 
-                    if rephrased_question:
-                        user_query = rephrased_question
+                    # Extract results from completed tasks
+                    sql_samples = sql_samples_task["formatted_output"].get(
+                        "documents", []
+                    )
+                    instructions = instructions_task["formatted_output"].get(
+                        "documents", []
+                    )
 
-                    if intent == "MISLEADING_QUERY":
-                        self._ask_results[query_id] = AskResultResponse(
-                            status="finished",
-                            type="MISLEADING_QUERY",
-                            rephrased_question=rephrased_question,
-                            intent_reasoning=intent_reasoning,
-                            trace_id=trace_id,
-                        )
-                        results["metadata"]["type"] = "MISLEADING_QUERY"
-                        return results
-                    elif intent == "GENERAL":
-                        asyncio.create_task(
-                            self._pipelines["data_assistance"].run(
+                    if self._allow_intent_classification:
+                        intent_classification_result = (
+                            await self._pipelines["intent_classification"].run(
                                 query=user_query,
-                                history=ask_request.history,
-                                db_schemas=intent_classification_result.get(
-                                    "db_schemas"
-                                ),
-                                language=ask_request.configurations.language,
-                                query_id=ask_request.query_id,
+                                histories=histories,
+                                sql_samples=sql_samples,
+                                instructions=instructions,
+                                project_id=ask_request.project_id,
+                                configuration=ask_request.configurations,
                             )
+                        ).get("post_process", {})
+                        intent = intent_classification_result.get("intent")
+                        rephrased_question = intent_classification_result.get(
+                            "rephrased_question"
                         )
+                        intent_reasoning = intent_classification_result.get("reasoning")
 
-                        self._ask_results[query_id] = AskResultResponse(
-                            status="finished",
-                            type="GENERAL",
-                            rephrased_question=rephrased_question,
-                            intent_reasoning=intent_reasoning,
-                            trace_id=trace_id,
-                        )
-                        results["metadata"]["type"] = "GENERAL"
-                        return results
-                    else:
-                        self._ask_results[query_id] = AskResultResponse(
-                            status="understanding",
-                            type="TEXT_TO_SQL",
-                            rephrased_question=rephrased_question,
-                            intent_reasoning=intent_reasoning,
-                            trace_id=trace_id,
-                        )
+                        if rephrased_question:
+                            user_query = rephrased_question
+
+                        if intent == "MISLEADING_QUERY":
+                            asyncio.create_task(
+                                self._pipelines["misleading_assistance"].run(
+                                    query=user_query,
+                                    histories=histories,
+                                    db_schemas=intent_classification_result.get(
+                                        "db_schemas"
+                                    ),
+                                    language=ask_request.configurations.language,
+                                    query_id=ask_request.query_id,
+                                    custom_instruction=ask_request.custom_instruction,
+                                )
+                            )
+
+                            self._ask_results[query_id] = AskResultResponse(
+                                status="finished",
+                                type="GENERAL",
+                                rephrased_question=rephrased_question,
+                                intent_reasoning=intent_reasoning,
+                                trace_id=trace_id,
+                                is_followup=True if histories else False,
+                                general_type="MISLEADING_QUERY",
+                            )
+                            results["metadata"]["type"] = "MISLEADING_QUERY"
+                            return results
+                        elif intent == "GENERAL":
+                            asyncio.create_task(
+                                self._pipelines["data_assistance"].run(
+                                    query=user_query,
+                                    histories=histories,
+                                    db_schemas=intent_classification_result.get(
+                                        "db_schemas"
+                                    ),
+                                    language=ask_request.configurations.language,
+                                    query_id=ask_request.query_id,
+                                    custom_instruction=ask_request.custom_instruction,
+                                )
+                            )
+
+                            self._ask_results[query_id] = AskResultResponse(
+                                status="finished",
+                                type="GENERAL",
+                                rephrased_question=rephrased_question,
+                                intent_reasoning=intent_reasoning,
+                                trace_id=trace_id,
+                                is_followup=True if histories else False,
+                                general_type="DATA_ASSISTANCE",
+                            )
+                            results["metadata"]["type"] = "GENERAL"
+                            return results
+                        elif intent == "USER_GUIDE":
+                            asyncio.create_task(
+                                self._pipelines["user_guide_assistance"].run(
+                                    query=user_query,
+                                    language=ask_request.configurations.language,
+                                    query_id=ask_request.query_id,
+                                    custom_instruction=ask_request.custom_instruction,
+                                )
+                            )
+
+                            self._ask_results[query_id] = AskResultResponse(
+                                status="finished",
+                                type="GENERAL",
+                                rephrased_question=rephrased_question,
+                                intent_reasoning=intent_reasoning,
+                                trace_id=trace_id,
+                                is_followup=True if histories else False,
+                                general_type="USER_GUIDE",
+                            )
+                            results["metadata"]["type"] = "GENERAL"
+                            return results
+                        else:
+                            self._ask_results[query_id] = AskResultResponse(
+                                status="understanding",
+                                type="TEXT_TO_SQL",
+                                rephrased_question=rephrased_question,
+                                intent_reasoning=intent_reasoning,
+                                trace_id=trace_id,
+                                is_followup=True if histories else False,
+                            )
             if not self._is_stopped(query_id, self._ask_results) and not api_results:
                 self._ask_results[query_id] = AskResultResponse(
                     status="searching",
@@ -311,12 +336,14 @@ class AskService:
                     rephrased_question=rephrased_question,
                     intent_reasoning=intent_reasoning,
                     trace_id=trace_id,
+                    is_followup=True if histories else False,
                 )
 
-                retrieval_result = await self._pipelines["retrieval"].run(
+                retrieval_result = await self._pipelines["db_schema_retrieval"].run(
                     query=user_query,
-                    history=ask_request.history,
-                    id=ask_request.project_id,
+                    histories=histories,
+                    project_id=ask_request.project_id,
+                    enable_column_pruning=enable_column_pruning,
                 )
                 _retrieval_result = retrieval_result.get(
                     "construct_retrieval_results", {}
@@ -338,6 +365,7 @@ class AskService:
                             rephrased_question=rephrased_question,
                             intent_reasoning=intent_reasoning,
                             trace_id=trace_id,
+                            is_followup=True if histories else False,
                         )
                     results["metadata"]["error_type"] = "NO_RELEVANT_DATA"
                     results["metadata"]["type"] = "TEXT_TO_SQL"
@@ -346,7 +374,7 @@ class AskService:
             if (
                 not self._is_stopped(query_id, self._ask_results)
                 and not api_results
-                and self._allow_sql_generation_reasoning
+                and allow_sql_generation_reasoning
             ):
                 self._ask_results[query_id] = AskResultResponse(
                     status="planning",
@@ -355,24 +383,32 @@ class AskService:
                     intent_reasoning=intent_reasoning,
                     retrieved_tables=table_names,
                     trace_id=trace_id,
+                    is_followup=True if histories else False,
                 )
 
-                sql_samples = (
-                    await self._pipelines["sql_pairs_retrieval"].run(
-                        query=ask_request.query,
-                        id=ask_request.project_id,
-                    )
-                )["formatted_output"].get("documents", [])
-
-                sql_generation_reasoning = (
-                    await self._pipelines["sql_generation_reasoning"].run(
-                        query=user_query,
-                        contexts=table_ddls,
-                        sql_samples=sql_samples,
-                        configuration=ask_request.configurations,
-                        query_id=query_id,
-                    )
-                ).get("post_process", {})
+                if histories:
+                    sql_generation_reasoning = (
+                        await self._pipelines["followup_sql_generation_reasoning"].run(
+                            query=user_query,
+                            contexts=table_ddls,
+                            histories=histories,
+                            sql_samples=sql_samples,
+                            instructions=instructions,
+                            configuration=ask_request.configurations,
+                            query_id=query_id,
+                        )
+                    ).get("post_process", {})
+                else:
+                    sql_generation_reasoning = (
+                        await self._pipelines["sql_generation_reasoning"].run(
+                            query=user_query,
+                            contexts=table_ddls,
+                            sql_samples=sql_samples,
+                            instructions=instructions,
+                            configuration=ask_request.configurations,
+                            query_id=query_id,
+                        )
+                    ).get("post_process", {})
 
                 self._ask_results[query_id] = AskResultResponse(
                     status="planning",
@@ -382,10 +418,8 @@ class AskService:
                     retrieved_tables=table_names,
                     sql_generation_reasoning=sql_generation_reasoning,
                     trace_id=trace_id,
+                    is_followup=True if histories else False,
                 )
-
-            invalid_sql = None
-            error_message = None
 
             if not self._is_stopped(query_id, self._ask_results) and not api_results:
                 self._ask_results[query_id] = AskResultResponse(
@@ -396,26 +430,41 @@ class AskService:
                     retrieved_tables=table_names,
                     sql_generation_reasoning=sql_generation_reasoning,
                     trace_id=trace_id,
+                    is_followup=True if histories else False,
                 )
 
-                has_calculated_field = (
-                    _retrieval_result.get("has_calculated_field", False),
-                )
-                has_metric = (_retrieval_result.get("has_metric", False),)
+                if allow_sql_functions_retrieval:
+                    sql_functions = await self._pipelines[
+                        "sql_functions_retrieval"
+                    ].run(
+                        project_id=ask_request.project_id,
+                    )
+                else:
+                    sql_functions = []
 
-                if ask_request.history:
+                has_calculated_field = _retrieval_result.get(
+                    "has_calculated_field", False
+                )
+                has_metric = _retrieval_result.get("has_metric", False)
+                has_json_field = _retrieval_result.get("has_json_field", False)
+
+                if histories:
                     text_to_sql_generation_results = await self._pipelines[
                         "followup_sql_generation"
                     ].run(
                         query=user_query,
                         contexts=table_ddls,
                         sql_generation_reasoning=sql_generation_reasoning,
-                        history=ask_request.history,
+                        histories=histories,
                         project_id=ask_request.project_id,
-                        configuration=ask_request.configurations,
                         sql_samples=sql_samples,
+                        instructions=instructions,
                         has_calculated_field=has_calculated_field,
                         has_metric=has_metric,
+                        has_json_field=has_json_field,
+                        sql_functions=sql_functions,
+                        use_dry_plan=use_dry_plan,
+                        allow_dry_plan_fallback=allow_dry_plan_fallback,
                     )
                 else:
                     text_to_sql_generation_results = await self._pipelines[
@@ -425,28 +474,39 @@ class AskService:
                         contexts=table_ddls,
                         sql_generation_reasoning=sql_generation_reasoning,
                         project_id=ask_request.project_id,
-                        configuration=ask_request.configurations,
                         sql_samples=sql_samples,
+                        instructions=instructions,
                         has_calculated_field=has_calculated_field,
                         has_metric=has_metric,
+                        has_json_field=has_json_field,
+                        sql_functions=sql_functions,
+                        use_dry_plan=use_dry_plan,
+                        allow_dry_plan_fallback=allow_dry_plan_fallback,
                     )
 
-                if sql_valid_results := text_to_sql_generation_results["post_process"][
-                    "valid_generation_results"
+                if sql_valid_result := text_to_sql_generation_results["post_process"][
+                    "valid_generation_result"
                 ]:
                     api_results = [
                         AskResult(
                             **{
-                                "sql": result.get("sql"),
+                                "sql": sql_valid_result.get("sql"),
                                 "type": "llm",
                             }
                         )
-                        for result in sql_valid_results
-                    ][:1]
-                elif failed_dry_run_results := text_to_sql_generation_results[
+                    ]
+                elif failed_dry_run_result := text_to_sql_generation_results[
                     "post_process"
-                ]["invalid_generation_results"]:
-                    if failed_dry_run_results[0]["type"] != "TIME_OUT":
+                ]["invalid_generation_result"]:
+                    while current_sql_correction_retries < max_sql_correction_retries:
+                        if failed_dry_run_result["type"] == "TIME_OUT":
+                            break
+
+                        original_sql = failed_dry_run_result["original_sql"]
+                        invalid_sql = failed_dry_run_result["sql"]
+                        error_message = failed_dry_run_result["error"]
+                        current_sql_correction_retries += 1
+
                         self._ask_results[query_id] = AskResultResponse(
                             status="correcting",
                             type="TEXT_TO_SQL",
@@ -455,18 +515,43 @@ class AskService:
                             retrieved_tables=table_names,
                             sql_generation_reasoning=sql_generation_reasoning,
                             trace_id=trace_id,
+                            is_followup=True if histories else False,
                         )
+
+                        if allow_sql_diagnosis:
+                            sql_diagnosis_results = await self._pipelines[
+                                "sql_diagnosis"
+                            ].run(
+                                contexts=table_ddls,
+                                original_sql=original_sql,
+                                invalid_sql=invalid_sql,
+                                error_message=error_message,
+                                language=ask_request.configurations.language,
+                            )
+                            sql_diagnosis_reasoning = sql_diagnosis_results[
+                                "post_process"
+                            ].get("reasoning")
+
                         sql_correction_results = await self._pipelines[
                             "sql_correction"
                         ].run(
                             contexts=table_ddls,
-                            invalid_generation_results=failed_dry_run_results,
+                            instructions=instructions,
+                            invalid_generation_result={
+                                "sql": original_sql,
+                                "error": sql_diagnosis_reasoning
+                                if allow_sql_diagnosis
+                                else error_message,
+                            },
                             project_id=ask_request.project_id,
+                            use_dry_plan=use_dry_plan,
+                            allow_dry_plan_fallback=allow_dry_plan_fallback,
+                            sql_functions=sql_functions,
                         )
 
-                        if valid_generation_results := sql_correction_results[
+                        if valid_generation_result := sql_correction_results[
                             "post_process"
-                        ]["valid_generation_results"]:
+                        ]["valid_generation_result"]:
                             api_results = [
                                 AskResult(
                                     **{
@@ -474,18 +559,12 @@ class AskService:
                                         "type": "llm",
                                     }
                                 )
-                                for valid_generation_result in valid_generation_results
-                            ][:1]
-                        elif failed_dry_run_results := sql_correction_results[
-                            "post_process"
-                        ]["invalid_generation_results"]:
-                            invalid = failed_dry_run_results[0]
-                            invalid_sql = invalid["sql"]
-                            error_message = invalid["error"]
-                    else:
-                        invalid = failed_dry_run_results[0]
-                        invalid_sql = invalid["sql"]
-                        error_message = invalid["error"]
+                            ]
+                            break
+
+                        failed_dry_run_result = sql_correction_results["post_process"][
+                            "invalid_generation_result"
+                        ]
 
             if api_results:
                 if not self._is_stopped(query_id, self._ask_results):
@@ -498,6 +577,7 @@ class AskService:
                         retrieved_tables=table_names,
                         sql_generation_reasoning=sql_generation_reasoning,
                         trace_id=trace_id,
+                        is_followup=True if histories else False,
                     )
                 results["ask_result"] = api_results
                 results["metadata"]["type"] = "TEXT_TO_SQL"
@@ -517,6 +597,7 @@ class AskService:
                         sql_generation_reasoning=sql_generation_reasoning,
                         invalid_sql=invalid_sql,
                         trace_id=trace_id,
+                        is_followup=True if histories else False,
                     )
                 results["metadata"]["error_type"] = "NO_RELEVANT_SQL"
                 results["metadata"]["error_message"] = error_message
@@ -534,6 +615,7 @@ class AskService:
                     message=str(e),
                 ),
                 trace_id=trace_id,
+                is_followup=True if histories else False,
             )
 
             results["metadata"]["error_type"] = "OTHERS"
@@ -573,193 +655,25 @@ class AskService:
         query_id: str,
     ):
         if self._ask_results.get(query_id):
+            _pipeline_name = ""
             if self._ask_results.get(query_id).type == "GENERAL":
-                async for chunk in self._pipelines[
-                    "data_assistance"
-                ].get_streaming_results(query_id):
-                    event = SSEEvent(
-                        data=SSEEvent.SSEEventMessage(message=chunk),
-                    )
-                    yield event.serialize()
+                if self._ask_results.get(query_id).general_type == "USER_GUIDE":
+                    _pipeline_name = "user_guide_assistance"
+                elif self._ask_results.get(query_id).general_type == "DATA_ASSISTANCE":
+                    _pipeline_name = "data_assistance"
+                elif self._ask_results.get(query_id).general_type == "MISLEADING_QUERY":
+                    _pipeline_name = "misleading_assistance"
             elif self._ask_results.get(query_id).status == "planning":
+                if self._ask_results.get(query_id).is_followup:
+                    _pipeline_name = "followup_sql_generation_reasoning"
+                else:
+                    _pipeline_name = "sql_generation_reasoning"
+
+            if _pipeline_name:
                 async for chunk in self._pipelines[
-                    "sql_generation_reasoning"
+                    _pipeline_name
                 ].get_streaming_results(query_id):
                     event = SSEEvent(
                         data=SSEEvent.SSEEventMessage(message=chunk),
                     )
                     yield event.serialize()
-
-    @observe(name="Ask Feedback")
-    @trace_metadata
-    async def ask_feedback(
-        self,
-        ask_feedback_request: AskFeedbackRequest,
-        **kwargs,
-    ):
-        trace_id = kwargs.get("trace_id")
-        results = {
-            "ask_feedback_result": {},
-            "metadata": {
-                "error_type": "",
-                "error_message": "",
-            },
-        }
-
-        query_id = ask_feedback_request.query_id
-        api_results = []
-        error_message = ""
-
-        try:
-            if not self._is_stopped(query_id, self._ask_feedback_results):
-                self._ask_feedback_results[query_id] = AskFeedbackResultResponse(
-                    status="searching",
-                    trace_id=trace_id,
-                )
-
-                retrieval_result = await self._pipelines["retrieval"].run(
-                    tables=ask_feedback_request.tables,
-                    id=ask_feedback_request.project_id,
-                )
-                _retrieval_result = retrieval_result.get(
-                    "construct_retrieval_results", {}
-                )
-                documents = _retrieval_result.get("retrieval_results", [])
-                table_ddls = [document.get("table_ddl") for document in documents]
-
-            if not self._is_stopped(query_id, self._ask_feedback_results):
-                self._ask_feedback_results[query_id] = AskFeedbackResultResponse(
-                    status="generating",
-                    trace_id=trace_id,
-                )
-
-                text_to_sql_generation_results = await self._pipelines[
-                    "sql_regeneration"
-                ].run(
-                    contexts=table_ddls,
-                    sql_generation_reasoning=ask_feedback_request.sql_generation_reasoning,
-                    sql=ask_feedback_request.sql,
-                    project_id=ask_feedback_request.project_id,
-                    configuration=ask_feedback_request.configurations,
-                )
-
-                if sql_valid_results := text_to_sql_generation_results["post_process"][
-                    "valid_generation_results"
-                ]:
-                    api_results = [
-                        AskResult(
-                            **{
-                                "sql": result.get("sql"),
-                                "type": "llm",
-                            }
-                        )
-                        for result in sql_valid_results
-                    ][:1]
-                elif failed_dry_run_results := text_to_sql_generation_results[
-                    "post_process"
-                ]["invalid_generation_results"]:
-                    if failed_dry_run_results[0]["type"] != "TIME_OUT":
-                        self._ask_feedback_results[query_id] = (
-                            AskFeedbackResultResponse(
-                                status="correcting",
-                                trace_id=trace_id,
-                            )
-                        )
-                        sql_correction_results = await self._pipelines[
-                            "sql_correction"
-                        ].run(
-                            contexts=[],
-                            invalid_generation_results=failed_dry_run_results,
-                            project_id=ask_feedback_request.project_id,
-                        )
-
-                        if valid_generation_results := sql_correction_results[
-                            "post_process"
-                        ]["valid_generation_results"]:
-                            api_results = [
-                                AskResult(
-                                    **{
-                                        "sql": valid_generation_result.get("sql"),
-                                        "type": "llm",
-                                    }
-                                )
-                                for valid_generation_result in valid_generation_results
-                            ][:1]
-                        elif failed_dry_run_results := sql_correction_results[
-                            "post_process"
-                        ]["invalid_generation_results"]:
-                            error_message = failed_dry_run_results[0]["error"]
-                    else:
-                        error_message = failed_dry_run_results[0]["error"]
-
-            if api_results:
-                if not self._is_stopped(query_id, self._ask_feedback_results):
-                    self._ask_feedback_results[query_id] = AskFeedbackResultResponse(
-                        status="finished",
-                        response=api_results,
-                        trace_id=trace_id,
-                    )
-                results["ask_feedback_result"] = api_results
-            else:
-                logger.exception("ask feedback pipeline - NO_RELEVANT_SQL")
-                if not self._is_stopped(query_id, self._ask_feedback_results):
-                    self._ask_feedback_results[query_id] = AskFeedbackResultResponse(
-                        status="failed",
-                        error=AskError(
-                            code="NO_RELEVANT_SQL",
-                            message=error_message or "No relevant SQL",
-                        ),
-                        trace_id=trace_id,
-                    )
-                results["metadata"]["error_type"] = "NO_RELEVANT_SQL"
-                results["metadata"]["error_message"] = error_message
-
-            return results
-
-        except Exception as e:
-            logger.exception(f"ask feedback pipeline - OTHERS: {e}")
-
-            self._ask_feedback_results[query_id] = AskFeedbackResultResponse(
-                status="failed",
-                error=AskError(
-                    code="OTHERS",
-                    message=str(e),
-                ),
-                trace_id=trace_id,
-            )
-
-            results["metadata"]["error_type"] = "OTHERS"
-            results["metadata"]["error_message"] = str(e)
-            return results
-
-    def stop_ask_feedback(
-        self,
-        stop_ask_feedback_request: StopAskFeedbackRequest,
-    ):
-        self._ask_feedback_results[stop_ask_feedback_request.query_id] = (
-            AskFeedbackResultResponse(
-                status="stopped",
-            )
-        )
-
-    def get_ask_feedback_result(
-        self,
-        ask_feedback_result_request: AskFeedbackResultRequest,
-    ) -> AskFeedbackResultResponse:
-        if (
-            result := self._ask_feedback_results.get(
-                ask_feedback_result_request.query_id
-            )
-        ) is None:
-            logger.exception(
-                f"ask feedback pipeline - OTHERS: {ask_feedback_result_request.query_id} is not found"
-            )
-            return AskFeedbackResultResponse(
-                status="failed",
-                error=AskError(
-                    code="OTHERS",
-                    message=f"{ask_feedback_result_request.query_id} is not found",
-                ),
-            )
-
-        return result

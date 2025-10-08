@@ -30,10 +30,12 @@ export const GET: RequestHandler = async ({ url, cookies }) => {
       }
 
       cookies.set("google_auth_token", accessToken, {
+        domain: 'localhost',
         path:"/",
         httpOnly: true,
         maxAge: 60 * 60 * 24 * 7,
-        sameSite: "strict"
+        sameSite: "lax",
+        secure: false, // Set to true if using HTTPS
       });
 
       oAuth2Client.setCredentials(response.tokens);

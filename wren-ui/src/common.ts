@@ -14,6 +14,11 @@ import {
   LearningRepository,
   DashboardItemRepository,
   DashboardRepository,
+  SqlPairRepository,
+  AskingTaskRepository,
+  InstructionRepository,
+  ApiHistoryRepository,
+  DashboardItemRefreshJobRepository,
 } from '@server/repositories';
 import {
   WrenEngineAdaptor,
@@ -28,12 +33,16 @@ import {
   AskingService,
   MDLService,
   DashboardService,
+  AskingTaskTracker,
+  InstructionService,
 } from '@server/services';
 import { PostHogTelemetry } from './apollo/server/telemetry/telemetry';
 import {
   ProjectRecommendQuestionBackgroundTracker,
   ThreadRecommendQuestionBackgroundTracker,
+  DashboardCacheBackgroundTracker,
 } from './apollo/server/backgrounds';
+import { SqlPairService } from './apollo/server/services/sqlPairService';
 
 export const serverConfig = getConfig();
 
@@ -60,6 +69,12 @@ export const initComponents = () => {
   const learningRepository = new LearningRepository(knex);
   const dashboardRepository = new DashboardRepository(knex);
   const dashboardItemRepository = new DashboardItemRepository(knex);
+  const sqlPairRepository = new SqlPairRepository(knex);
+  const askingTaskRepository = new AskingTaskRepository(knex);
+  const instructionRepository = new InstructionRepository(knex);
+  const apiHistoryRepository = new ApiHistoryRepository(knex);
+  const dashboardItemRefreshJobRepository =
+    new DashboardItemRefreshJobRepository(knex);
 
   // adaptors
   const wrenEngineAdaptor = new WrenEngineAdaptor({
@@ -102,6 +117,12 @@ export const initComponents = () => {
     wrenAIAdaptor,
     telemetry,
   });
+  const askingTaskTracker = new AskingTaskTracker({
+    wrenAIAdaptor,
+    askingTaskRepository,
+    threadResponseRepository,
+    viewRepository,
+  });
   const askingService = new AskingService({
     telemetry,
     wrenAIAdaptor,
@@ -112,11 +133,22 @@ export const initComponents = () => {
     threadResponseRepository,
     queryService,
     mdlService,
+    askingTaskTracker,
+    askingTaskRepository,
   });
   const dashboardService = new DashboardService({
     projectService,
     dashboardItemRepository,
     dashboardRepository,
+  });
+  const sqlPairService = new SqlPairService({
+    sqlPairRepository,
+    wrenAIAdaptor,
+    ibisAdaptor,
+  });
+  const instructionService = new InstructionService({
+    instructionRepository,
+    wrenAIAdaptor,
   });
 
   // background trackers
@@ -132,6 +164,14 @@ export const initComponents = () => {
       wrenAIAdaptor,
       threadRepository,
     });
+  const dashboardCacheBackgroundTracker = new DashboardCacheBackgroundTracker({
+    dashboardRepository,
+    dashboardItemRepository,
+    dashboardItemRefreshJobRepository,
+    projectService,
+    deployService,
+    queryService,
+  });
 
   return {
     knex,
@@ -151,6 +191,11 @@ export const initComponents = () => {
     modelNestedColumnRepository,
     dashboardRepository,
     dashboardItemRepository,
+    sqlPairRepository,
+    askingTaskRepository,
+    apiHistoryRepository,
+    instructionRepository,
+    dashboardItemRefreshJobRepository,
 
     // adaptors
     wrenEngineAdaptor,
@@ -165,10 +210,14 @@ export const initComponents = () => {
     askingService,
     mdlService,
     dashboardService,
+    sqlPairService,
+    instructionService,
+    askingTaskTracker,
 
     // background trackers
     projectRecommendQuestionBackgroundTracker,
     threadRecommendQuestionBackgroundTracker,
+    dashboardCacheBackgroundTracker,
   };
 };
 

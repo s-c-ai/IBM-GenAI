@@ -15,7 +15,7 @@ import {
 } from '../types';
 import { getLogger, transformInvalidColumnName } from '@server/utils';
 import { DeployResponse } from '../services/deployService';
-import { format } from 'sql-formatter';
+import { safeFormatSQL } from '@server/utils/sqlFormat';
 import { isEmpty, isNil } from 'lodash';
 import { replaceAllowableSyntax, validateDisplayName } from '../utils/regex';
 import { Model, ModelColumn } from '../repositories';
@@ -221,6 +221,13 @@ export class ModelResolver {
     ctx: IContext,
   ): Promise<DeployResponse> {
     const project = await ctx.projectService.getCurrentProject();
+    if (!project.version && project.type !== DataSourceName.DUCKDB) {
+      const version =
+        await ctx.projectService.getProjectDataSourceVersion(project);
+      await ctx.projectService.updateProject(project.id, {
+        version,
+      });
+    }
     const { manifest } = await ctx.mdlService.makeCurrentModelMDL();
     const deployRes = await ctx.deployService.deploy(
       manifest,
@@ -814,7 +821,7 @@ export class ModelResolver {
     }
 
     // construct cte sql and format it
-    const statement = format(response.sql);
+    const statement = safeFormatSQL(response.sql);
 
     // describe columns
     const { columns } = await ctx.queryService.describeStatement(statement, {
@@ -932,7 +939,7 @@ export class ModelResolver {
   ) {
     const { sql, projectId, limit, dryRun } = args.data;
     const project = projectId
-      ? await ctx.projectService.getProjectById(projectId)
+      ? await ctx.projectService.getProjectById(parseInt(projectId))
       : await ctx.projectService.getCurrentProject();
     const { manifest } = await ctx.deployService.getLastDeployment(project.id);
     return await ctx.queryService.preview(sql, {
@@ -980,7 +987,8 @@ export class ModelResolver {
         mdl: manifest,
       });
     }
-    return format(nativeSql);
+    const language = project.type === DataSourceName.MSSQL ? 'tsql' : undefined;
+    return safeFormatSQL(nativeSql, { language });
   }
 
   public async updateViewMetadata(

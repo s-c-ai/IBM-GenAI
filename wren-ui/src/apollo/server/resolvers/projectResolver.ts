@@ -130,6 +130,7 @@ export class ProjectResolver {
       await ctx.modelService.deleteAllViewsByProjectId(id);
       await ctx.modelService.deleteAllModelsByProjectId(id);
       await ctx.projectService.deleteProject(id);
+      await ctx.wrenAIAdaptor.delete(id);
 
       // telemetry
       ctx.telemetry.sendEvent(eventName, {
@@ -296,6 +297,11 @@ export class ProjectResolver {
       } else {
         // handle other data source
         await ctx.projectService.getProjectDataSourceTables(project);
+        const version =
+          await ctx.projectService.getProjectDataSourceVersion(project);
+        await ctx.projectService.updateProject(project.id, {
+          version,
+        });
         logger.debug(`Data source tables fetched`);
       }
       // telemetry

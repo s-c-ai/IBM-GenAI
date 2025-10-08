@@ -35,15 +35,17 @@ class OutputFormatter:
 
 ## Start of Pipeline
 @observe(capture_input=False)
-async def count_documents(store: QdrantDocumentStore, id: Optional[str] = None) -> int:
+async def count_documents(
+    store: QdrantDocumentStore, project_id: Optional[str] = None
+) -> int:
     filters = (
         {
             "operator": "AND",
             "conditions": [
-                {"field": "project_id", "operator": "==", "value": id},
+                {"field": "project_id", "operator": "==", "value": project_id},
             ],
         }
-        if id
+        if project_id
         else None
     )
     document_count = await store.count_documents(filters=filters)
@@ -59,16 +61,16 @@ async def embedding(count_documents: int, query: str, embedder: Any) -> dict:
 
 
 @observe(capture_input=False)
-async def retrieval(embedding: dict, id: str, retriever: Any) -> dict:
+async def retrieval(embedding: dict, project_id: str, retriever: Any) -> dict:
     if embedding:
         filters = (
             {
                 "operator": "AND",
                 "conditions": [
-                    {"field": "project_id", "operator": "==", "value": id},
+                    {"field": "project_id", "operator": "==", "value": project_id},
                 ],
             }
-            if id
+            if project_id
             else None
         )
 
@@ -116,8 +118,8 @@ class SqlPairsRetrieval(BasicPipeline):
         self,
         embedder_provider: EmbedderProvider,
         document_store_provider: DocumentStoreProvider,
-        sql_pairs_similarity_threshold: Optional[float] = 0.7,
-        sql_pairs_retrieval_max_size: Optional[int] = 10,
+        sql_pairs_similarity_threshold: float = 0.7,
+        sql_pairs_retrieval_max_size: int = 10,
         **kwargs,
     ) -> None:
         store = document_store_provider.get_store(dataset_name="sql_pairs")
@@ -141,24 +143,14 @@ class SqlPairsRetrieval(BasicPipeline):
         )
 
     @observe(name="SqlPairs Retrieval")
-    async def run(self, query: str, id: Optional[str] = None):
+    async def run(self, query: str, project_id: Optional[str] = None):
         logger.info("SqlPairs Retrieval pipeline is running...")
         return await self._pipe.execute(
             ["formatted_output"],
             inputs={
                 "query": query,
-                "id": id or "",
+                "project_id": project_id or "",
                 **self._components,
                 **self._configs,
             },
         )
-
-
-if __name__ == "__main__":
-    from src.pipelines.common import dry_run_pipeline
-
-    dry_run_pipeline(
-        SqlPairsRetrieval,
-        "sql_pairs_retrieval",
-        query="this is a test query",
-    )

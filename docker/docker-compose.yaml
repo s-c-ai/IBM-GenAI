@@ -41,6 +41,8 @@ services:
       - ${IBIS_SERVER_PORT}
     environment:
       WREN_ENGINE_ENDPOINT: http://wren-engine:${WREN_ENGINE_PORT}
+    volumes:
+      - ${LOCAL_STORAGE:-.}:/usr/src/app/data
     networks:
       - wren
 
@@ -58,11 +60,12 @@ services:
       # sometimes the console won't show print messages,
       # using PYTHONUNBUFFERED: 1 can fix this
       PYTHONUNBUFFERED: 1
-      CONFIG_PATH: /app/data/config.yaml
+      CONFIG_PATH: /app/config.yaml
     env_file:
       - ${PROJECT_DIR}/.env
     volumes:
-      - ${PROJECT_DIR}/config.yaml:/app/data/config.yaml
+      - ${PROJECT_DIR}/config.yaml:/app/config.yaml:ro
+      - ${PROJECT_DIR}/data:/app/data:ro
     networks:
       - wren
     depends_on:
@@ -111,9 +114,11 @@ services:
       EXPERIMENTAL_ENGINE_RUST_VERSION: ${EXPERIMENTAL_ENGINE_RUST_VERSION}
       # configs
       WREN_PRODUCT_VERSION: ${WREN_PRODUCT_VERSION}
-    ports:
-      # HOST_PORT is the port you want to expose to the host machine
-      - ${HOST_PORT}:3000
+    # ports:
+    #   # HOST_PORT is the port you want to expose to the host machine
+    #   - ${HOST_PORT}:3000
+    expose:
+      - 3000
     volumes:
       - data:/app/data
     networks:
@@ -121,6 +126,7 @@ services:
     depends_on:
       - wren-ai-service
       - wren-engine
+      
   wren-auth:
     build:
       context: ../wren-auth
@@ -129,9 +135,23 @@ services:
     environment:
       CLIENT_ID: ${CLIENT_ID}
       CLIENT_SECRET: ${CLIENT_SECRET}
-      REDIRECT_WRENAI: http://wren-ui:3000/home
-      REDIRECT_OAUTH: http://wren-ui:5173/oauth
+      REDIRECT_WRENAI: http://localhost:3000/home
+      REDIRECT_OAUTH: http://localhost:5173/oauth
     ports:
       - 5173:5173
     networks:
       - wren
+
+  nginx:
+      image: nginx
+      volumes:
+        - ./nginx/nginx.conf:/etc/nginx/conf.d/default.conf
+      ports:
+        - 3000:80
+      networks:
+        - wren
+      depends_on:
+        - wren-ui
+        - wren-auth
+
+ 

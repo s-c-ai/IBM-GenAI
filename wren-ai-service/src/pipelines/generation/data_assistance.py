@@ -10,6 +10,8 @@ from langfuse.decorators import observe
 
 from src.core.pipeline import BasicPipeline
 from src.core.provider import LLMProvider
+from src.pipelines.common import clean_up_new_lines
+from src.utils import trace_cost
 from src.web.v1.services.ask import AskHistory
 
 logger = logging.getLogger("wren-ai-service")
@@ -27,9 +29,10 @@ using the Markdown format. Your goal is to help guide user understand its databa
 - There should be proper line breaks, whitespace, and Markdown formatting(headers, lists, tables, etc.) in your response.
 - If the language is Traditional/Simplified Chinese, Korean, or Japanese, the maximum response length is 150 words; otherwise, the maximum response length is 110 words.
 - MUST NOT add SQL code in your response.
+- If the user provides a custom instruction, it should be followed strictly and you should use it to change the style of response.
 
 ### OUTPUT FORMAT ###
-Please provide your response in proper Markdown format.
+Please provide your response in proper Markdown format without ```markdown``` tags.
 """
 
 data_assistance_user_prompt_template = """
@@ -42,6 +45,8 @@ data_assistance_user_prompt_template = """
 User's question: {{query}}
 Language: {{language}}
 
+Custom Instruction: {{ custom_instruction }}
+
 Please think step by step
 """
 
@@ -52,34 +57,36 @@ def prompt(
     query: str,
     db_schemas: list[str],
     language: str,
+    histories: list[AskHistory],
     prompt_builder: PromptBuilder,
-    history: Optional[AskHistory] = None,
+    custom_instruction: str,
 ) -> dict:
-    if history:
-        previous_query_summaries = [
-            step.summary for step in history.steps if step.summary
-        ]
-    else:
-        previous_query_summaries = []
-
+    previous_query_summaries = (
+        [history.question for history in histories] if histories else []
+    )
     query = "\n".join(previous_query_summaries) + "\n" + query
 
-    return prompt_builder.run(
+    _prompt = prompt_builder.run(
         query=query,
         db_schemas=db_schemas,
         language=language,
+        custom_instruction=custom_instruction,
     )
+    return {"prompt": clean_up_new_lines(_prompt.get("prompt"))}
 
 
 @observe(as_type="generation", capture_input=False)
-async def data_assistance(prompt: dict, generator: Any, query_id: str) -> dict:
-    return await generator(prompt=prompt.get("prompt"), query_id=query_id)
+@trace_cost
+async def data_assistance(
+    prompt: dict, generator: Any, query_id: str, generator_name: str
+) -> dict:
+    return await generator(
+        prompt=prompt.get("prompt"),
+        query_id=query_id,
+    ), generator_name
 
 
 ## End of Pipeline
-
-
-DATA_ASSISTANCE_MODEL_KWARGS = {"response_format": {"type": "text"}}
 
 
 class DataAssistance(BasicPipeline):
@@ -92,9 +99,9 @@ class DataAssistance(BasicPipeline):
         self._components = {
             "generator": llm_provider.get_generator(
                 system_prompt=data_assistance_system_prompt,
-                generation_kwargs=DATA_ASSISTANCE_MODEL_KWARGS,
                 streaming_callback=self._streaming_callback,
             ),
+            "generator_name": llm_provider.get_model(),
             "prompt_builder": PromptBuilder(
                 template=data_assistance_user_prompt_template
             ),
@@ -146,7 +153,8 @@ class DataAssistance(BasicPipeline):
         db_schemas: list[str],
         language: str,
         query_id: Optional[str] = None,
-        history: Optional[AskHistory] = None,
+        histories: Optional[list[AskHistory]] = None,
+        custom_instruction: Optional[str] = None,
     ):
         logger.info("Data Assistance pipeline is running...")
         return await self._pipe.execute(
@@ -156,19 +164,8 @@ class DataAssistance(BasicPipeline):
                 "db_schemas": db_schemas,
                 "language": language,
                 "query_id": query_id or "",
-                "history": history,
+                "histories": histories or [],
+                "custom_instruction": custom_instruction or "",
                 **self._components,
             },
         )
-
-
-if __name__ == "__main__":
-    from src.pipelines.common import dry_run_pipeline
-
-    dry_run_pipeline(
-        DataAssistance,
-        "data_assistance",
-        query="show me the dataset",
-        db_schemas=[],
-        language="English",
-    )

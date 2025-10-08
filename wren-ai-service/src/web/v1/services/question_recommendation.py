@@ -9,56 +9,51 @@ from pydantic import BaseModel
 
 from src.core.pipeline import BasicPipeline
 from src.utils import trace_metadata
-from src.web.v1.services import Configuration, MetadataTraceable
+from src.web.v1.services import BaseRequest, MetadataTraceable
 
 logger = logging.getLogger("wren-ai-service")
 
 
 class QuestionRecommendation:
-    class Input(BaseModel):
-        id: str
-        mdl: str
-        previous_questions: list[str] = []
-        project_id: Optional[str] = None
-        max_questions: Optional[int] = 5
-        max_categories: Optional[int] = 3
-        regenerate: Optional[bool] = False
-        configuration: Optional[Configuration] = Configuration()
+    class Error(BaseModel):
+        code: Literal["OTHERS", "MDL_PARSE_ERROR", "RESOURCE_NOT_FOUND"]
+        message: str
 
-    class Resource(BaseModel, MetadataTraceable):
-        class Error(BaseModel):
-            code: Literal["OTHERS", "MDL_PARSE_ERROR", "RESOURCE_NOT_FOUND"]
-            message: str
-
-        id: str
+    class Event(BaseModel, MetadataTraceable):
+        event_id: str
         status: Literal["generating", "finished", "failed"] = "generating"
-        response: Optional[dict] = {"questions": {}}
-        error: Optional[Error] = None
+        response: dict = {"questions": {}}
+        error: Optional["QuestionRecommendation.Error"] = None
         trace_id: Optional[str] = None
+        request_from: Literal["ui", "api"] = "ui"
 
     def __init__(
         self,
         pipelines: Dict[str, BasicPipeline],
+        allow_sql_functions_retrieval: bool = True,
         maxsize: int = 1_000_000,
         ttl: int = 120,
     ):
         self._pipelines = pipelines
-        self._cache: Dict[str, QuestionRecommendation.Resource] = TTLCache(
+        self._cache: Dict[str, QuestionRecommendation.Event] = TTLCache(
             maxsize=maxsize, ttl=ttl
         )
+        self._allow_sql_functions_retrieval = allow_sql_functions_retrieval
 
     def _handle_exception(
         self,
-        input: Input,
+        event_id: str,
         error_message: str,
         code: str = "OTHERS",
         trace_id: Optional[str] = None,
+        request_from: Literal["ui", "api"] = "ui",
     ):
-        self._cache[input.id] = self.Resource(
-            id=input.id,
+        self._cache[event_id] = self.Event(
+            event_id=event_id,
             status="failed",
-            error=self.Resource.Error(code=code, message=error_message),
+            error=self.Error(code=code, message=error_message),
             trace_id=trace_id,
+            request_from=request_from,
         )
         logger.error(error_message)
 
@@ -70,43 +65,72 @@ class QuestionRecommendation:
         max_questions: int,
         max_categories: int,
         project_id: Optional[str] = None,
-        configuration: Optional[Configuration] = Configuration(),
+        allow_data_preview: bool = True,
     ):
-        try:
-            retrieval_result = await self._pipelines["retrieval"].run(
+        async def _document_retrieval() -> tuple[list[str], bool, bool, bool]:
+            retrieval_result = await self._pipelines["db_schema_retrieval"].run(
                 query=candidate["question"],
-                id=project_id,
+                project_id=project_id,
             )
             _retrieval_result = retrieval_result.get("construct_retrieval_results", {})
             documents = _retrieval_result.get("retrieval_results", [])
             table_ddls = [document.get("table_ddl") for document in documents]
             has_calculated_field = _retrieval_result.get("has_calculated_field", False)
             has_metric = _retrieval_result.get("has_metric", False)
+            has_json_field = _retrieval_result.get("has_json_field", False)
+            return table_ddls, has_calculated_field, has_metric, has_json_field
 
-            sql_generation_reasoning = (
-                await self._pipelines["sql_generation_reasoning"].run(
-                    query=candidate["question"],
-                    contexts=table_ddls,
-                    configuration=configuration,
+        async def _sql_pairs_retrieval() -> list[dict]:
+            sql_pairs_result = await self._pipelines["sql_pairs_retrieval"].run(
+                query=candidate["question"],
+                project_id=project_id,
+            )
+            sql_samples = sql_pairs_result["formatted_output"].get("documents", [])
+            return sql_samples
+
+        async def _instructions_retrieval() -> list[dict]:
+            result = await self._pipelines["instructions_retrieval"].run(
+                query=candidate["question"],
+                project_id=project_id,
+                scope="sql",
+            )
+            instructions = result["formatted_output"].get("instructions", [])
+            return instructions
+
+        try:
+            _document, sql_samples, instructions = await asyncio.gather(
+                _document_retrieval(),
+                _sql_pairs_retrieval(),
+                _instructions_retrieval(),
+            )
+            table_ddls, has_calculated_field, has_metric, has_json_field = _document
+
+            if self._allow_sql_functions_retrieval:
+                sql_functions = await self._pipelines["sql_functions_retrieval"].run(
+                    project_id=project_id,
                 )
-            ).get("post_process", {})
+            else:
+                sql_functions = []
 
             generated_sql = await self._pipelines["sql_generation"].run(
                 query=candidate["question"],
                 contexts=table_ddls,
-                sql_generation_reasoning=sql_generation_reasoning,
-                configuration=configuration,
                 project_id=project_id,
+                sql_samples=sql_samples,
+                instructions=instructions,
                 has_calculated_field=has_calculated_field,
                 has_metric=has_metric,
+                has_json_field=has_json_field,
+                sql_functions=sql_functions,
+                allow_data_preview=allow_data_preview,
             )
 
             post_process = generated_sql["post_process"]
 
-            if len(post_process["valid_generation_results"]) == 0:
+            if len(post_process["valid_generation_result"]) == 0:
                 return post_process
 
-            valid_sql = post_process["valid_generation_results"][0]["sql"]
+            valid_sql = post_process["valid_generation_result"]["sql"]
 
             # Partial update the resource
             current = self._cache[request_id]
@@ -131,17 +155,26 @@ class QuestionRecommendation:
         except Exception as e:
             logger.error(f"Request {request_id}: Error validating question: {str(e)}")
 
-    async def _recommend(self, request: dict, input: Input):
+    class Request(BaseRequest):
+        event_id: str
+        mdl: str
+        previous_questions: list[str] = []
+        max_questions: int = 5
+        max_categories: int = 3
+        regenerate: bool = False
+        allow_data_preview: bool = True
+
+    async def _recommend(self, request: dict):
         resp = await self._pipelines["question_recommendation"].run(**request)
         questions = resp.get("normalized", {}).get("questions", [])
         validation_tasks = [
             self._validate_question(
                 question,
-                input.id,
-                input.max_questions,
-                input.max_categories,
-                input.project_id,
-                input.configuration,
+                request["event_id"],
+                request["max_questions"],
+                request["max_categories"],
+                project_id=request["project_id"],
+                allow_data_preview=request["allow_data_preview"],
             )
             for question in questions
         ]
@@ -150,25 +183,36 @@ class QuestionRecommendation:
 
     @observe(name="Generate Question Recommendation")
     @trace_metadata
-    async def recommend(self, input: Input, **kwargs) -> Resource:
+    async def recommend(self, input: Request, **kwargs) -> Event:
         logger.info(
-            f"Request {input.id}: Generate Question Recommendation pipeline is running..."
+            f"Request {input.event_id}: Generate Question Recommendation pipeline is running..."
         )
         trace_id = kwargs.get("trace_id")
 
         try:
+            mdl = orjson.loads(input.mdl)
+            retrieval_result = await self._pipelines["db_schema_retrieval"].run(
+                tables=[model["name"] for model in mdl["models"]],
+                project_id=input.project_id,
+            )
+            _retrieval_result = retrieval_result.get("construct_retrieval_results", {})
+            documents = _retrieval_result.get("retrieval_results", [])
+            table_ddls = [document.get("table_ddl") for document in documents]
+
             request = {
-                "mdl": orjson.loads(input.mdl),
+                "contexts": table_ddls,
                 "previous_questions": input.previous_questions,
-                "language": input.configuration.language,
-                "current_date": input.configuration.show_current_time(),
+                "language": input.configurations.language,
                 "max_questions": input.max_questions,
                 "max_categories": input.max_categories,
+                "project_id": input.project_id,
+                "event_id": input.event_id,
+                "allow_data_preview": input.allow_data_preview,
             }
 
-            await self._recommend(request, input)
+            await self._recommend(request)
 
-            resource = self._cache[input.id]
+            resource = self._cache[input.event_id]
             resource.trace_id = trace_id
             response = resource.response
 
@@ -191,40 +235,42 @@ class QuestionRecommendation:
                     "categories": categories,
                     "max_categories": len(categories),
                 },
-                input,
             )
 
-            self._cache[input.id].status = "finished"
+            self._cache[input.event_id].status = "finished"
+            self._cache[input.event_id].request_from = input.request_from
 
         except orjson.JSONDecodeError as e:
             self._handle_exception(
-                input,
+                input.event_id,
                 f"Failed to parse MDL: {str(e)}",
                 code="MDL_PARSE_ERROR",
                 trace_id=trace_id,
+                request_from=input.request_from,
             )
         except Exception as e:
             self._handle_exception(
-                input,
+                input.event_id,
                 f"An error occurred during question recommendation generation: {str(e)}",
                 trace_id=trace_id,
+                request_from=input.request_from,
             )
 
-        return self._cache[input.id].with_metadata()
+        return self._cache[input.event_id].with_metadata()
 
-    def __getitem__(self, id: str) -> Resource:
+    def __getitem__(self, id: str) -> Event:
         response = self._cache.get(id)
 
         if response is None:
             message = f"Question Recommendation Resource with ID '{id}' not found."
             logger.exception(message)
-            return self.Resource(
-                id=id,
+            return self.Event(
+                event_id=id,
                 status="failed",
-                error=self.Resource.Error(code="RESOURCE_NOT_FOUND", message=message),
+                error=self.Error(code="RESOURCE_NOT_FOUND", message=message),
             )
 
         return response
 
-    def __setitem__(self, id: str, value: Resource):
+    def __setitem__(self, id: str, value: Event):
         self._cache[id] = value

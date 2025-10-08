@@ -31,6 +31,9 @@ export const ERROR_TEXTS = {
     PORT: {
       REQUIRED: 'Please input port.',
     },
+    USER: {
+      REQUIRED: 'Please input user.',
+    },
     USERNAME: {
       REQUIRED: 'Please input username.',
     },
@@ -48,6 +51,24 @@ export const ERROR_TEXTS = {
     },
     ACCOUNT: {
       REQUIRED: 'Please input account.',
+    },
+    S3_STAGING_DIR: {
+      REQUIRED: 'Please input S3 staging directory.',
+    },
+    AWS_REGION: {
+      REQUIRED: 'Please input AWS region.',
+    },
+    AWS_ACCESS_KEY: {
+      REQUIRED: 'Please input AWS access key ID.',
+    },
+    AWS_SECRET_KEY: {
+      REQUIRED: 'Please input AWS secret access key.',
+    },
+    CLUSTER_IDENTIFIER: {
+      REQUIRED: 'Please input cluster identifier.',
+    },
+    PRIVATE_KEY_FILE: {
+      REQUIRED: 'Please upload a private key file.',
     },
   },
   ADD_RELATION: {
@@ -97,6 +118,57 @@ export const ERROR_TEXTS = {
       REQUIRED: 'Please select a field.',
       INVALID_STRING_TYPE: 'Please select a string type field.',
       INVALID_NUMBER_TYPE: 'Please select a number type field.',
+    },
+  },
+  SQL_PAIR: {
+    SQL: {
+      REQUIRED: 'Please input SQL statement.',
+    },
+    QUESTION: {
+      REQUIRED: 'Please input a matching question.',
+      MAX_LENGTH: 'Question must be 300 characters or fewer.',
+    },
+  },
+  INSTRUCTION: {
+    DETAILS: {
+      REQUIRED: 'Please input an instruction details.',
+    },
+    QUESTIONS: {
+      REQUIRED: 'Please input a matching question.',
+    },
+    IS_DEFAULT_GLOBAL: {
+      REQUIRED: 'Please select how to apply this instruction.',
+    },
+  },
+  FIX_SQL: {
+    SQL: {
+      REQUIRED: 'Please input SQL statement.',
+    },
+  },
+  ADJUST_REASONING: {
+    SELECTED_MODELS: {
+      REQUIRED: 'Please select at least one model',
+    },
+    STEPS: {
+      REQUIRED: 'Please input reasoning steps',
+      MAX_LENGTH: 'Reasoning steps must be 6000 characters or fewer.',
+    },
+  },
+  IMPORT_DATA_SOURCE_SQL: {
+    SQL: {
+      REQUIRED: 'Please input SQL statement.',
+    },
+  },
+  CRON: {
+    REQUIRED: 'Please input cron expression.',
+    INVALID: 'Invalid cron expression.',
+  },
+  CACHE_SETTINGS: {
+    DAY: {
+      REQUIRED: 'Please select day.',
+    },
+    TIME: {
+      REQUIRED: 'Please select time.',
     },
   },
 };

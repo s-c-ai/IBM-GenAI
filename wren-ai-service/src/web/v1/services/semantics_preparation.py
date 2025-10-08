@@ -8,17 +8,17 @@ from pydantic import AliasChoices, BaseModel, Field
 
 from src.core.pipeline import BasicPipeline
 from src.utils import trace_metadata
+from src.web.v1.services import BaseRequest
 
 logger = logging.getLogger("wren-ai-service")
 
 
 # POST /v1/semantics-preparations
-class SemanticsPreparationRequest(BaseModel):
+class SemanticsPreparationRequest(BaseRequest):
     mdl: str
     # don't recommend to use id as a field name, but it's used in the API spec
     # so we need to support as a choice, and will remove it in the future
     mdl_hash: str = Field(validation_alias=AliasChoices("mdl_hash", "id"))
-    project_id: Optional[str] = None
 
 
 class SemanticsPreparationResponse(BaseModel):
@@ -66,6 +66,7 @@ class SemanticsPreparationService:
             "metadata": {
                 "error_type": "",
                 "error_message": "",
+                "request_from": prepare_semantics_request.request_from,
             },
         }
 
@@ -84,6 +85,7 @@ class SemanticsPreparationService:
                     "historical_question",
                     "table_description",
                     "sql_pairs",
+                    "project_meta",
                 ]
             ]
 
@@ -135,18 +137,23 @@ class SemanticsPreparationService:
 
     @observe(name="Delete Semantics Documents")
     @trace_metadata
-    async def delete_semantics(self, project_id: str):
+    async def delete_semantics(self, project_id: str, **kwargs):
         logger.info(f"Project ID: {project_id}, Deleting semantics documents...")
 
         tasks = [
             self._pipelines[name].clean(project_id=project_id)
-            for name in ["db_schema", "historical_question", "table_description"]
+            for name in [
+                "db_schema",
+                "historical_question",
+                "table_description",
+                "project_meta",
+            ]
         ] + [
-            self._pipelines["sql_pairs"].clean(
-                sql_pairs=[],
+            self._pipelines[name].clean(
                 project_id=project_id,
                 delete_all=True,
             )
+            for name in ["sql_pairs", "instructions"]
         ]
 
         await asyncio.gather(*tasks)

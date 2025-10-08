@@ -40,15 +40,16 @@ services:
     ports:
       - ${AI_SERVICE_FORWARD_PORT}:${WREN_AI_SERVICE_PORT}
     environment:
-      WREN_UI_ENDPOINT: http://docker.for.mac.localhost:${WREN_UI_PORT}
+      WREN_UI_ENDPOINT: http://host.docker.internal:${WREN_UI_PORT}
       # sometimes the console won't show print messages,
       # using PYTHONUNBUFFERED: 1 can fix this
       PYTHONUNBUFFERED: 1
-      CONFIG_PATH: /app/data/config.yaml
+      CONFIG_PATH: /app/config.yaml
     env_file:
       - ${PROJECT_DIR}/.env
     volumes:
-      - ${PROJECT_DIR}/config.yaml:/app/data/config.yaml
+      - ${PROJECT_DIR}/config.yaml:/app/config.yaml:ro
+      - ${PROJECT_DIR}/data:/app/data:ro
     networks:
       - wren
     depends_on:

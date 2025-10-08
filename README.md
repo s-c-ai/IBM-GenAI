@@ -1,10 +1,33 @@
-<h1 align="center">
-CESPUB GenAI
-</h1>
+
+<p align="center" id="top">
+  <a href="https://getwren.ai/?utm_source=github&utm_medium=title&utm_campaign=readme">
+    <picture>
+      <source media="(prefers-color-scheme: light)" srcset="./misc/wrenai_logo.png">
+      <img src="./misc/wrenai_logo_white.png" width="300px">
+    </picture>
+    <h1 align="center">Wren AI - Open-Source GenBI Agent</h1>
+  </a>
+</p>
 
 <p align="center">
-    <img src="https://www.totvs.com/wp-content/uploads/2019/09/logo.png" width="250">
-    <img src="https://s-c.ai/img/scientific_logao_redux.png" width="100" style="margin-left: -50px; margin-top: -30px;">
+  <a aria-label="Follow us on X" href="https://x.com/getwrenai">
+    <img alt="" src="https://img.shields.io/badge/-@getwrenai-blue?style=for-the-badge&logo=x&logoColor=white&labelColor=gray&logoWidth=20">
+  </a>
+  <a aria-label="Releases" href="https://github.com/canner/WrenAI/releases">
+    <img alt="" src="https://img.shields.io/github/v/release/canner/WrenAI?logo=github&label=GitHub%20Release&color=blue&style=for-the-badge">
+  </a>
+  <a aria-label="License" href="https://github.com/Canner/WrenAI/blob/main/LICENSE">
+    <img alt="" src="https://img.shields.io/github/license/canner/WrenAI?color=blue&style=for-the-badge">
+  </a>
+  <a href="https://docs.getwren.ai">
+    <img src="https://img.shields.io/badge/docs-online-brightgreen?style=for-the-badge" alt="Docs">
+  </a>
+  <a aria-label="Join the community on GitHub" href="https://discord.gg/5DvshJqG8Z">
+    <img alt="" src="https://img.shields.io/badge/-JOIN%20THE%20COMMUNITY-blue?style=for-the-badge&logo=discord&logoColor=white&labelColor=grey&logoWidth=20">
+  </a>
+  <a aria-label="Canner" href="https://cannerdata.com/?utm_source=github&utm_medium=badge&utm_campaign=readme">
+    <img src="https://img.shields.io/badge/%F0%9F%A7%A1-Made%20by%20Canner-blue?style=for-the-badge">
+  </a>
 </p>
 
 <p align="center">
@@ -14,87 +37,112 @@ CESPUB GenAI
 <a href="#licença">Licença</a>
 </p>
 
-<p align="center">
-<b>Decision Intelligence</b>
-</p>
-
----
+> Wren AI is your GenBI Agent, that you can query any database with natural language → get accurate SQL(Text-to-SQL), charts(Text-to-Charts) & AI-generated insights in seconds. ⚡️
 
 <p align="center">
-<b>Tempo estimado:</b> 3 semanas
+  <img width="1920" height="1080" alt="1" src="https://github.com/user-attachments/assets/bba9d37a-33e3-49ab-b7cb-32fd6dddc8d1" />
 </p>
+ 
+## 😍 Demos
+
+https://github.com/user-attachments/assets/f9c1cb34-5a95-4580-8890-ec9644da4160
+
+[Watch GenBI Demo](https://github.com/user-attachments/assets/90ad1d35-bb1e-490b-9676-b29863ff090b)
+
+## 🤖 Features
+
+|                    | What you get | Why it matters |
+|--------------------|--------------|----------------|
+| **Talk to Your Data** | Ask in any language → precise SQL & answers | Slash the SQL learning curve﻿ |
+| **GenBI Insights** | AI-written summaries, charts & reports | Decision-ready context in one click﻿ |
+| **Semantic Layer** | MDL models encode schema, metrics, joins | Keeps LLM outputs accurate & governed﻿ |
+| **Embed via API**  | Generate queries & charts inside your apps ([API Docs](https://wrenai.readme.io/reference/cloud-getting-started)) | Build custom agents, SaaS features, chatbots﻿ ([Streamlit Live Demo](https://huggingface.co/spaces/getWrenAI/wrenai-cloud-api-demo)) |
+
+🤩 [Learn more about GenBI](https://getwren.ai/genbi?utm_source=github&utm_medium=content&utm_campaign=readme)
+
+## 🚀 Getting Started
+
+Using Wren AI is super simple, you can set it up within 3 minutes, and start to interact with your data!
 
 <p align="center">
-<b>Data de ínicio: 12/03/2025</b> |
-<b>Data de finalização: Em desenvolvimento</b>
+  <img width="1920" height="1080" alt="2" src="https://github.com/user-attachments/assets/6555f539-9ef2-485d-9135-0071741fda96" />
 </p>
 
----
+- Visit our [Install in your local environment](http://docs.getwren.ai/oss/installation?utm_source=github&utm_medium=content&utm_campaign=readme).
+- Visit the [Usage Guides](https://docs.getwren.ai/oss/guide/connect/overview?utm_source=github&utm_medium=content&utm_campaign=readme) to learn more about how to use Wren AI.
+- Or just start with [Wren AI Cloud](https://getwren.ai/?utm_source=github&utm_medium=content&utm_campaign=readme) our Managed Cloud Service. ([OSS vs. Commercial Plans](https://docs.getwren.ai/oss/overview/cloud_vs_self_host)).
 
-- Board de atividades: [Planner](https://planner.cloud.microsoft/webui/plan/8R7zsF8fG0i6HQxbJ54n42QAGHKR/view/board?tid=26c14496-9556-43db-8169-202c0c793d4d)
-- Especificação do Projeto: [Proposta CESPUB](https://scientificloud01.sharepoint.com/sites/CESPUBGenAI/Documentos%20Compartilhados/Forms/AllItems.aspx?id=%2Fsites%2FCESPUBGenAI%2FDocumentos%20Compartilhados%2FCESPUB%20%2D%20Proposta%20Claudinho%20%2D%20tecnica%201%2Epdf&parent=%2Fsites%2FCESPUBGenAI%2FDocumentos%20Compartilhados)
-- Documentação: [Documentação WrenAI](https://github.com/s-c-ai/CESPUB-GenAI/blob/main/OLD_README.md)
+## 🏗️ Architecture
 
----
+<p align="center">
+  <img width="1011" height="682" alt="wrenai-architecture" src="https://github.com/user-attachments/assets/e99b999f-9912-4fa7-921a-9c86b6b83354" />
+</p>
 
-## Sobre o Projeto
+👉 [Learn more about our Design](https://getwren.ai/post/how-we-design-our-semantic-engine-for-llms-the-backbone-of-the-semantic-layer-for-llm-architecture?utm_source=github&utm_medium=content&utm_campaign=readme)
 
-Viabilizar análises e criação de insights a partir de dados de editais passados.
 
-```mermaid
-flowchart LR
-    A[Usuário] -- Pergunta --> B[GenAI]
-    B <--> C[Tabela]
-    B -- Resultado --> A
-```
 
-**Tipos de resultado**: Texto, gráfico e tabela.
+## 🔌 Data Sources
 
-### Desafio
+If your data source is not listed here, vote for it in our [GitHub discussion thread](https://github.com/Canner/WrenAI/discussions/327). It will be a valuable input for us to decide on the next supported data sources.
+- Athena (Trino)
+- Redshift
+- BigQuery
+- DuckDB
+- PostgreSQL
+- MySQL
+- Microsoft SQL Server
+- ClickHouse
+- Oracle
+- Trino
+- Snowflake
 
-Atender diferentes públicos - diretoria, área comercial e analistas da engenharia de valor - para criar análises e insights que se adequem ao perfil de cada usuário.
+## 🤖 LLM Models
 
-### Motivação
+Wren AI supports integration with various Large Language Models (LLMs), including but not limited to:
+- OpenAI Models
+- Azure OpenAI Models
+- DeepSeek Models
+- Google AI Studio – Gemini Models
+- Vertex AI Models (Gemini + Anthropic)
+- Bedrock Models
+- Anthropic API Models
+- Groq Models
+- Ollama Models
+- Databricks Models
 
-Utilizar Inteligência Artificial Generativa (GenAI) para acelerar o perfil analítico de usuários com diferentes níveis de entendimento e acesso à informação desejada.
+Check [configuration examples here](https://github.com/Canner/WrenAI/tree/main/wren-ai-service/docs/config_examples)!
 
-O projeto visa democratizar o acesso a análises e insights utilizando a flexibilidade da GenAI para trazer respostas rápidas e concisas, podendo reunir diferentes usuários em uma aplicação.
+> [!CAUTION]
+> The performance of Wren AI depends significantly on the capabilities of the LLM you choose. We strongly recommend using the most powerful model available for optimal results. Using less capable models may lead to reduced performance, slower response times, or inaccurate outputs.
 
-## Sobre o Cliente [WIP]
+## 📚 Documentation
 
-WIP
+Visit [Wren AI documentation](https://docs.getwren.ai/oss/overview/introduction?utm_source=github&utm_medium=content&utm_campaign=readme) to view the full documentation.
 
-## Equipe Técnica
+## 📪 Keep Posted?
 
-<table>
-  <tr>
-    <td align="center">
-      <a href="https://www.linkedin.com/in/kalatalo/">
-        <img src="https://avatars.githubusercontent.com/u/46749957?v=4" width="100px;" alt="Luciano Kalatalo Profile Picture"/><br>
-        <sub>
-          <b>Luciano Kalatalo</b>
-        </sub>
-      </a>
-    </td>
-    <td align="center">
-      <a href="https://www.linkedin.com/in/richardwallan/">
-        <img src="https://avatars.githubusercontent.com/u/70775844?v=4" width="100px;" alt="Richard Wallan Picture"/><br>
-        <sub>
-          <b>Richard Wallan</b>
-        </sub>
-      </a>
-    </td>
-    <td align="center">
-      <a href="https://www.linkedin.com/in/nor-mustafa/">
-        <img src="https://avatars.githubusercontent.com/u/205325128?v=4" width="100px;" alt="Lucca Moiolli Picture"/><br>
-        <sub>
-          <b>Nor Mustafa</b>
-        </sub>
-      </a>
-    </td>
-  </tr>
-</table>
+[Subscribe our blog](https://www.getwren.ai/blog/?utm_source=github&utm_medium=content&utm_campaign=readme) and [Follow our LinkedIn](https://www.linkedin.com/company/wrenai)
 
-## Licença
+## 🛠️ Contribution
 
-Todos os direitos reservados à [ScientifiCloud](https://s-c.ai).
+1.	Star ⭐ the repo to show support (it really helps).
+2.	Open an issue for bugs, ideas, or discussions.
+3.	Read [Contribution Guidelines](https://github.com/Canner/WrenAI/blob/main/CONTRIBUTING.md) for setup & PR guidelines.
+
+## ⭐️ Community
+
+- Join 1.3k+ developers in our [Discord](https://discord.gg/5DvshJqG8Z) for real-time help and roadmap previews.
+- If there are any issues, please visit [GitHub Issues](https://github.com/Canner/WrenAI/issues).
+- Explore our [public roadmap](https://wrenai.notion.site/) to stay updated on upcoming features and improvements!
+
+Please note that our [Code of Conduct](./CODE_OF_CONDUCT.md) applies to all Wren AI community channels. Users are **highly encouraged** to read and adhere to them to avoid repercussions.
+
+## 🎉 Our Contributors
+<a href="https://github.com/canner/wrenAI/graphs/contributors">
+  <img src="https://contrib.rocks/image?repo=Canner/WrenAI" />
+</a>
+
+<p align="right">
+  <a href="#top">⬆️ Back to Top</a>
+</p>

@@ -44,7 +44,12 @@ def formatter(prediction: dict, meta: dict) -> dict:
 
     return {
         "input": prediction["input"],
-        "actual_output": prediction.get("actual_output", {}).get("sql", ""),
+        "actual_output": (
+            prediction.get("actual_output", {})
+            .get("post_process", {})
+            .get("valid_generation_result", {})
+            .get("sql", "")
+        ),
         "expected_output": prediction["expected_output"],
         "retrieval_context": retrieval_context,
         "context": context,
@@ -93,9 +98,6 @@ class Evaluator:
 
     def eval(self, meta: dict, predictions: list) -> None:
         for prediction in predictions:
-            if prediction.get("type") != "shallow":
-                continue
-
             try:
                 test_case = LLMTestCase(**formatter(prediction, meta))
                 result = evaluate(
@@ -171,7 +173,7 @@ if __name__ == "__main__":
 
     dataset = parse_toml(meta["evaluation_dataset"])
     metrics = pipelines.metrics_initiator(
-        meta["pipeline"], dataset, pipe_components, args.semantics
+        meta["pipeline"], dataset, pipe_components, args.semantics, settings
     )
 
     evaluator = Evaluator(**metrics)
@@ -183,7 +185,7 @@ if __name__ == "__main__":
     #     optimizer_parameters["meta"] = meta
     #     optimizer_parameters["predictions"] = predictions
     #     configure_llm_provider(
-    #         os.getenv("GENERATION_MODEL"), os.getenv("LLM_OPENAI_API_KEY")
+    #         os.getenv("GENERATION_MODEL"), os.getenv("OPENAI_API_KEY")
     #     )
     #     trainset, devset = prepare_dataset(args.training_dataset)
     #     build_optimizing_module(trainset)
