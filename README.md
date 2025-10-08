@@ -136,17 +136,14 @@ Wren AI suporta integração com vários Modelos de Linguagem de Grande Escala (
     ⚠️ ATENÇÃO
     O desempenho do Wren AI depende significativamente das capacidades do LLM que você escolher. Recomendamos fortemente usar o modelo mais poderoso disponível para resultados otimais. Usar modelos menos capazes pode levar a desempenho reduzido, tempos de resposta mais lentos ou saídas imprecisas.
 
-# 🧩 Wren-launcher — CESPUB-GenAI
+# 🧩 CESPUB-GenAI
 
-## 📋 Descrição
 
 Este módulo faz parte do projeto **CESPUB-GenAI**, com foco na integração do **WrenAI** e dos serviços complementares **wren-auth** e **nginx** para ambientes de produção.
 
----
+## 🚀 Instalação
 
-## 🚀 Instalação Rápida
-
-### 🔧 WrenAI Base (Wren-launcher)
+1. Instale o wren-launcher:
 
 Para subir os containers base do WrenAI, execute o comando abaixo:
 
@@ -155,68 +152,53 @@ curl -L https://github.com/Canner/WrenAI/releases/latest/download/wren-launcher-
 ```
 Após a instalação, adicione sua API_KEY e selecione o modelo gpt-4.1 quando solicitado.
 
+2. Clone o repositório do projeto atual:
 
-> [!CAUTION]
-> Este repositório está atualizado de acordo com a versão 0.28.0 do repositório [Canner/WrenAI](https://github.com/Canner/WrenAI), portanto se encontra com alguns bugs na construção das imagens dos serviços por meio do docker-compose. A solução encontrada foi utilizar o wren-launcher para criar os containers. Para o desenvolvimento de novas features ou updates, é interessante aplicar as modificações sem fazer um novo build, somente parando os containers e subindo-os novamente. Caso seja necessário fazer alguma mudança muito relevante, evite refazer as imagens dos serviços que não sejam o wren-auth ou o nginx.
-
-## 📥 Clonagem do Repositório
-
-### 🔸 Opção A — Repositório Principal (main)
 ```bash
 git clone https://github.com/s-c-ai/CESPUB-GenAI
 cd CESPUB-GenAI/docker
 ```
-### 🔸 Opção B — Feature Branch Específica
-```bash
-git clone -b feat/nginx-producao/wren-auth https://github.com/s-c-ai/CESPUB-GenAI
-cd CESPUB-GenAI/docker
-```
-> 🔹 Permite testar a feature nginx-producao/wren-auth antes do merge na main
+3. Configure as variáveis de ambiente no diretório docker:
 
-### 🔸 Opção C — Pull Request Específica (PR #7)
-git fetch origin pull/7/head:pr-7
-git checkout pr-7
-cd docker
-> 🔹 Cria branch local pr-7 com o conteúdo exato da Pull Request #7
-
-## ⚙️ Configuração
-
-No diretório docker/, edite o arquivo .env:
 ```.env
 API_KEY=coloque_sua_chave_aqui
 CLIENT_ID=coloque_seu_client_id_aqui
 CLIENT_SECRET=coloque_seu_client_secret_aqui
 ```
-## 🐳 Deploy com Docker
+ 4. Inicie o docker compose sem acionar o build
 
-### 🚀 Subir Containers
 ```
 docker compose -f ./docker-compose.yaml up -d
 ```
 
 Este comando subirá todos os containers, sem fazer qualquer alteração nos containers já criados pelo wren-launcher.
 
-### 🔍 Status dos Containers
+> [!WARNING]
+> Este repositório está atualizado de acordo com a versão 0.28.0 do repositório [Canner/WrenAI](https://github.com/Canner/WrenAI), portanto se encontra com alguns bugs na construção das imagens dos serviços por meio do docker-compose. A solução encontrada foi utilizar o wren-launcher para criar os containers. Para o desenvolvimento de novas features ou updates, é interessante aplicar as modificações sem fazer um novo build, somente parando os containers e subindo-os novamente. Caso seja necessário fazer alguma mudança muito relevante, evite refazer as imagens dos serviços que não sejam o wren-auth ou o nginx.
+
+## Comando Úteis:
+
+#### 🔍 Status dos Containers
 
 - Verifique se todos os containers subiram corretamente por meio do comando
 ```
 docker ps
 ```
-E verifique o localhost e a porta de destino.
+E verifique a porta do localhost e a porta de destino.
 
-### 📊 Logs do Serviço
+#### 📊 Logs do Serviço
 
 ```
 docker compose logs <nome do container> -f
 ```
 
-### ⏹️ Parar Containers
+#### ⏹️ Parar Containers
 
 ```
 docker compose down
 ```
 
-### 🔄 Reconstruir e Subir
+#### 🔄 Reconstruir e Subir
 
 ```
 docker compose up -d --force-recreate nginx wren-auth
