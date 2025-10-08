@@ -1,4 +1,3 @@
-import Link from 'next/link';
 import Image from 'next/image';
 import { Row, Col } from 'antd';
 import { Logo } from '@/components/Logo';
@@ -44,20 +43,12 @@ const EmptyDashboard = (props: {
         className="d-flex align-center justify-center flex-column -mt-8"
         style={{ height: '100%' }}
       >
-        <Logo size={48} color="var(--gray-8)" />
+        <Logo size={48} />
         <div className="text-lg text-medium text-center gray-8 mt-3">
           No charts have been added yet
         </div>
         <div className="gray-7">
-          Follow these steps to pin charts to your dashboard.{' '}
-          <Link
-            className="gray-8 underline"
-            href="https://docs.getwren.ai/oss/guide/home/dashboard"
-            rel="noopener noreferrer"
-            target="_blank"
-          >
-            Learn more
-          </Link>
+          Follow these steps to pin charts to your dashboard.
         </div>
         <Row className="mt-4" gutter={[16, 16]}>
           <StepIterator
