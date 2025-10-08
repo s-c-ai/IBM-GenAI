@@ -133,8 +133,8 @@ Wren AI suporta integração com vários Modelos de Linguagem de Grande Escala (
 
 [Confira exemplos de configuração aqui! 📝](https://github.com/Canner/WrenAI/tree/main/wren-ai-service/docs/config_examples)
 
-    ⚠️ ATENÇÃO
-    O desempenho do Wren AI depende significativamente das capacidades do LLM que você escolher. Recomendamos fortemente usar o modelo mais poderoso disponível para resultados otimais. Usar modelos menos capazes pode levar a desempenho reduzido, tempos de resposta mais lentos ou saídas imprecisas.
+> [!WARNING]
+> O desempenho do Wren AI depende significativamente das capacidades do LLM que você escolher. Recomendamos fortemente usar o modelo mais poderoso disponível para resultados otimais. Usar modelos menos capazes pode levar a desempenho reduzido, tempos de resposta mais lentos ou saídas imprecisas.
 
 # 🧩 CESPUB-GenAI
 
