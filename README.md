@@ -31,10 +31,7 @@
 </p>
 
 <p align="center">
-<a href="#sobre-o-projeto">Sobre o Projeto</a> •
-<a href="#sobre-o-cliente">Sobre o Cliente</a> •
-<a href="#equipe-técnica">Equipe Técnica</a> •
-<a href="#licença">Licença</a>
+  <a href="https://trendshift.io/repositories/9263" target="_blank"><img src="https://trendshift.io/api/badge/repositories/9263" alt="Canner%2FWrenAI | Trendshift" style="width: 250px; height: 55px;" width="250" height="55"/></a>
 </p>
 
 > Wren AI is your GenBI Agent, that you can query any database with natural language → get accurate SQL(Text-to-SQL), charts(Text-to-Charts) & AI-generated insights in seconds. ⚡️

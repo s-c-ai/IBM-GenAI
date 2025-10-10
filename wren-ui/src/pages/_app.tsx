@@ -16,7 +16,7 @@ function App({ Component, pageProps }: AppProps) {
   return (
     <>
       <Head>
-        <title>Totvs AI</title>
+        <title>Wren AI</title>
         <link rel="icon" href="/favicon.ico" />
       </Head>
       <GlobalConfigProvider>

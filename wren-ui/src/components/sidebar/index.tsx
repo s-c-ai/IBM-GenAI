@@ -3,7 +3,7 @@ import { useRouter } from 'next/router';
 import { Button } from 'antd';
 import styled from 'styled-components';
 import { Path } from '@/utils/enum';
-import { GithubIcon, HomeIcon } from '@/utils/icons';
+import { DiscordIcon, GithubIcon } from '@/utils/icons';
 import SettingOutlined from '@ant-design/icons/SettingOutlined';
 import Home, { Props as HomeSidebarProps } from './Home';
 import Modeling, { Props as ModelingSidebarProps } from './Modeling';
@@ -86,6 +86,7 @@ export default function Sidebar(props: Props) {
   return (
     <Layout className="d-flex flex-column">
       <DynamicSidebar {...props} pathname={router.pathname} />
+      <LearningSection />
       <div className="border-t border-gray-4 pt-2">
         <StyledButton type="text" block onClick={onSettingsClick}>
           <SettingOutlined className="text-md" />
@@ -94,19 +95,19 @@ export default function Sidebar(props: Props) {
         <StyledButton type="text" block>
           <Link
             className="d-flex align-center"
-            href="https://s-c.ai"
+            href="https://discord.com/invite/5DvshJqG8Z"
             target="_blank"
             rel="noopener noreferrer"
             data-ph-capture="true"
             data-ph-capture-attribute-name="cta_go_to_discord"
           >
-            <HomeIcon className="mr-2" style={{ width: 16 }} /> Website
+            <DiscordIcon className="mr-2" style={{ width: 16 }} /> Discord
           </Link>
         </StyledButton>
         <StyledButton type="text" block>
           <Link
             className="d-flex align-center"
-            href="https://github.com/s-c-ai/CESPUB-GenAI"
+            href="https://github.com/Canner/WrenAI"
             target="_blank"
             rel="noopener noreferrer"
             data-ph-capture="true"

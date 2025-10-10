@@ -6,6 +6,7 @@ import { makeIterable } from '@/utils/iteration';
 import { ModalAction } from '@/hooks/useModalAction';
 import SettingOutlined from '@ant-design/icons/SettingOutlined';
 import InfoCircleOutlined from '@ant-design/icons/InfoCircleOutlined';
+import DataSourceSettings from './DataSourceSettings';
 import ProjectSettings from './ProjectSettings';
 import { getSettingMenu } from './utils';
 import {
@@ -48,13 +49,26 @@ const StyledButton = styled(Button)`
 const DynamicComponent = ({
   menu,
   data,
+  refetch,
+  closeModal,
 }: {
   menu: SETTINGS;
   data?: GetSettingsQuery['settings'];
+  refetch: () => void;
+  closeModal: () => void;
 }) => {
-  const { language } = data || {};
+  const { dataSource, language } = data || {};
   return (
     {
+      [SETTINGS.DATA_SOURCE]: (
+        <DataSourceSettings
+          type={dataSource?.type}
+          sampleDataset={dataSource?.sampleDataset}
+          properties={dataSource?.properties}
+          refetchSettings={refetch}
+          closeModal={closeModal}
+        />
+      ),
       [SETTINGS.PROJECT]: <ProjectSettings data={{ language }} />,
     }[menu] || null
   );
@@ -79,13 +93,13 @@ const MenuIterator = makeIterable(MenuTemplate);
 
 export default function Settings(props: Props) {
   const { onClose, visible } = props;
-  const [menu, setMenu] = useState<SETTINGS>(SETTINGS.PROJECT);
+  const [menu, setMenu] = useState<SETTINGS>(SETTINGS.DATA_SOURCE);
   const current = getSettingMenu(menu);
   const menuList = Object.keys(SETTINGS).map((key) => ({
     key,
     value: SETTINGS[key],
   }));
-  const [fetchSettings, { data }] = useGetSettingsLazyQuery({
+  const [fetchSettings, { data, refetch }] = useGetSettingsLazyQuery({
     fetchPolicy: 'cache-and-network',
   });
 
@@ -125,7 +139,7 @@ export default function Settings(props: Props) {
           {!!productVersion && (
             <div className="gray-7 d-flex align-center p-3 px-5">
               <InfoCircleOutlined className="mr-2 text-sm" />
-              App version: {productVersion}
+              Wren AI version: {productVersion}
             </div>
           )}
         </StyledSider>
@@ -135,7 +149,12 @@ export default function Settings(props: Props) {
             {current.label}
           </div>
           <div className="flex-grow-1" style={{ overflowY: 'auto' }}>
-            <DynamicComponent menu={menu} data={data?.settings} />
+            <DynamicComponent
+              menu={menu}
+              data={data?.settings}
+              refetch={refetch}
+              closeModal={onClose}
+            />
           </div>
         </Content>
       </Layout>
