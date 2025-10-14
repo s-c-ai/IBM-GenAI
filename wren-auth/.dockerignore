@@ -1,0 +1,6 @@
+# Ignorar dependências locais
+node_modules
+
+# Arquivos de sistema e de log
+.DS_Store
+npm-debug.log
