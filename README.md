@@ -136,10 +136,10 @@ Wren AI suporta integração com vários Modelos de Linguagem de Grande Escala (
 > [!WARNING]
 > O desempenho do Wren AI depende significativamente das capacidades do LLM que você escolher. Recomendamos fortemente usar o modelo mais poderoso disponível para resultados otimais. Usar modelos menos capazes pode levar a desempenho reduzido, tempos de resposta mais lentos ou saídas imprecisas.
 
-# 🧩 CESPUB-GenAI
+# 🧩 ScientifiCloud-GenAI
 
 
-Este módulo faz parte do projeto **CESPUB-GenAI**, com foco na integração do **WrenAI** e dos serviços complementares **wren-auth** e **nginx** para ambientes de produção.
+Este módulo faz parte do projeto **ScientifiCloud-GenAI**, com foco na integração do **WrenAI** e dos serviços complementares **wren-auth** e **nginx** para ambientes de produção.
 
 ## 🚀 Instalação
 
@@ -155,8 +155,8 @@ Após a instalação, adicione sua API_KEY e selecione o modelo gpt-4.1 quando s
 2. Clone o repositório do projeto atual:
 
 ```bash
-git clone https://github.com/s-c-ai/CESPUB-GenAI
-cd CESPUB-GenAI/docker
+git clone https://github.com/s-c-ai/WrenAI
+cd WrenAI/docker
 ```
 3. Configure as variáveis de ambiente no diretório docker:
 
