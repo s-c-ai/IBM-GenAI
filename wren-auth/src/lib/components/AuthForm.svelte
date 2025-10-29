@@ -10,22 +10,22 @@
 >
   <img src={logoImage} alt="" class="mb-10 w-100 h-20" />
   <h1 class="text-center md:text-start text-dark-blue font-bold text-5xl mb-6">
-    Log in to your account
+    Faça o login
   </h1>
-  <h2 class="text-dark-blue font-medium text-2xl mb-10">Welcome back!</h2>
+  <h2 class="text-dark-blue font-medium text-2xl mb-10">Bem vindo!</h2>
   <form
     method="post"
     class="auth-form flex flex-col w-full h-full items-center"
   >
     <LoginButton type="submit">
       <Icon icon="logos:google-icon" width="24" height="24" />
-      <span class="text-sm text-dark-blue">Login with Google account</span>
+      <span class="text-sm text-dark-blue">Entrar com conta Google</span>
     </LoginButton>
   </form>
   <p class="text-dark-blue text-xs mt-6">
-    Problems to log in your account? <a
+    Problemas para entrar na sua conta <a
       class="text-primary font-bold text-xs cursor-pointer"
-      href="mailto:claudinho@s-c.ai">Send us an email</a
+      href="mailto:claudinho@s-c.ai">Envie-nos um e-mail</a
     >
   </p>
 </div>

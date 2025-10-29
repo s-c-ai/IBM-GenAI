@@ -12,10 +12,10 @@
   >
     <div class="hidden lg:flex lg:flex-col lg:w-9/20">
       <h1 class="text-dark-blue font-bold text-5xl mb-6">
-        Intelligent, Efficient and <br />Productive
+        Inteligente, Eficiente e <br />Produtivo
       </h1>
       <h2 class="text-dark-blue font-medium text-2xl">
-        An AI Applications Hub
+        Um Hub de Aplicações de IA
       </h2>
     </div>
     <div class="lg:w-9/20 lg:h-3/4 bg-neutre">
@@ -26,10 +26,10 @@
     class="flex w-full justify-center gap-10 fixed bottom-0 mb-10 sm:justify-start"
   >
     <a class="text-primary font-bold text-xs" href="mailto:contato@s-c.ai"
-      >Contact Us</a
+      >Entre em contato</a
     >
     <a class="text-primary font-bold text-xs" href="https://s-c.ai"
-      >Our website</a
+      >Nosso site</a
     >
   </div>
 </section>
